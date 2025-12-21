@@ -1,0 +1,285 @@
+🧱 PHASE 0 — Ground Rules (read once)
+
+One backend (NextJS)
+
+One database
+
+Backend is the source of truth
+
+Orders drive inventory & sales
+
+Sales = processed orders
+
+No refactoring until delivery
+
+🧩 PHASE 1 — Backend Foundation
+Step 1: Create core modules
+
+Create these modules only:
+
+AuthModule
+
+ProductsModule
+
+OrdersModule
+
+SalesModule
+
+NotificationsModule (stub only)
+
+Do not add more.
+
+Step 2: Auth (keep it simple)
+
+Implement:
+
+Admin login
+
+JWT auth guard
+
+No roles, no permissions matrix.
+
+Everyone logged in is “admin” for v1.
+
+📦 PHASE 2 — Inventory / Products
+Step 3: Product entity
+
+Create a Product entity with:
+
+id
+
+name
+
+price
+
+stockQuantity
+
+createdAt
+
+Step 4: Product CRUD
+
+Implement:
+
+Create product
+
+Update product
+
+List products
+
+Get product by id
+
+Step 5: Inventory logic
+
+Add logic to:
+
+Increase stock
+
+Decrease stock
+
+Prevent stock from going below zero
+
+❗ Do not reduce stock here automatically — only expose functions.
+
+🛒 PHASE 3 — Orders (CORE LOGIC)
+Step 6: Order entity
+
+Create an Order entity:
+
+id
+
+source → ONLINE | POS
+
+status → PENDING | PROCESSED
+
+items → productId + quantity
+
+total
+
+createdAt
+
+Step 7: Create online order
+
+When checkout happens:
+
+Validate products exist
+
+Calculate total
+
+Create order:
+
+status = PENDING
+
+source = ONLINE
+
+Save order
+
+Create notification:
+
+ORDER_PLACED
+
+🚫 Do not reduce stock here
+
+Step 8: List orders (admin)
+
+Implement endpoints:
+
+List all orders
+
+Filter by status (PENDING)
+
+This powers:
+
+Admin orders screen
+
+POS review screen
+
+🔄 PHASE 4 — Order Processing (MOST IMPORTANT)
+Step 9: Process order (admin action)
+
+When admin clicks Process Order:
+
+Fetch order
+
+Ensure order is PENDING
+
+For each item:
+
+Check stock availability
+
+Reduce stock
+
+Update order → PROCESSED
+
+Create sale record
+
+Create notification:
+
+ORDER_PROCESSED
+
+❗ If stock fails → abort everything
+
+🧾 PHASE 5 — Sales
+Step 10: Sale entity
+
+Create a Sale entity:
+
+id
+
+orderId
+
+total
+
+source
+
+createdAt
+
+Step 11: Sales creation rule
+
+Sales are only created when:
+
+Order status becomes PROCESSED
+
+No exceptions.
+
+🏪 PHASE 6 — POS (In-Store Sales)
+Step 12: POS sale flow
+
+When staff completes a sale:
+
+Validate stock
+
+Reduce inventory
+
+Create order:
+
+status = PROCESSED
+
+source = POS
+
+Create sale
+
+🚫 No notifications needed
+
+📊 PHASE 7 — Reports
+Step 13: Sales reports
+
+Implement queries:
+
+Today’s sales
+
+Sales by date range
+
+Total revenue
+
+Only query the sales table.
+
+🔔 PHASE 8 — Notifications (MINIMAL)
+Step 14: Notification stub
+
+Implement:
+
+Create notification record
+
+List notifications
+
+Do not integrate Firebase yet.
+
+🧪 PHASE 9 — Validation & Safety
+Step 15: Global rules
+
+Add:
+
+Request validation (DTOs)
+
+Transaction handling for:
+
+Order processing
+
+POS sale
+
+Step 16: Edge cases
+
+Test:
+
+Out of stock
+
+Double processing same order
+
+Invalid product IDs
+
+🎯 PHASE 10 — Frontend Hookup
+Step 17: Admin UI wiring
+
+Hook admin UI to:
+
+Inventory CRUD
+
+Orders list
+
+Process order button
+
+POS sale flow
+
+Reports view
+
+Step 18: Online store wiring
+
+Hook checkout to:
+
+Create online order
+
+🚦 DONE CRITERIA (very important)
+
+Your app is DONE when:
+
+Online order reduces stock after processing
+
+POS sale reduces stock immediately
+
+Sales appear in reports
+
+Admin can process orders
+
+Inventory is consistent
+
+Anything beyond this is v2.

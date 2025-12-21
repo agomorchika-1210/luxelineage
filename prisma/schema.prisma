@@ -1,0 +1,112 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// PHASE 1: Auth Module
+// Admin linked to Supabase Auth via firebaseUid (field name kept for backward compatibility)
+model Admin {
+  id         String   @id @default(cuid())
+  firebaseUid String  @unique // Supabase Auth UID (field name kept for backward compatibility)
+  email      String   @unique
+  role       AdminRole @default(SALES_PERSON)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum AdminRole {
+  ADMIN
+  MANAGER
+  SALES_PERSON
+}
+
+// PHASE 2: Products Module
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  sku           String   @unique
+  brand         String
+  price         Float
+  stockQuantity Int      @default(0)
+  category      String
+  description   String?
+  image         String?
+  images        String?  // JSON array of image URLs
+  sizes         String?  // JSON array of sizes
+  colors        String?  // JSON array of colors
+  features      String?  // JSON array of features
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  orderItems    OrderItem[]
+}
+
+// PHASE 3: Orders Module
+model Order {
+  id        String      @id @default(cuid())
+  source    OrderSource @default(ONLINE)
+  status    OrderStatus @default(PENDING)
+  total     Float
+  items     OrderItem[]
+  sale      Sale?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  
+  // Customer info for online orders
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+  shippingAddress String?
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float   // Price at time of order
+}
+
+enum OrderSource {
+  ONLINE
+  POS
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSED
+}
+
+// PHASE 5: Sales Module
+model Sale {
+  id        String      @id @default(cuid())
+  orderId   String      @unique
+  order     Order       @relation(fields: [orderId], references: [id])
+  source    OrderSource
+  total     Float
+  createdAt DateTime    @default(now())
+}
+
+// PHASE 8: Notifications Module (stub)
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  message   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+enum NotificationType {
+  ORDER_PLACED
+  ORDER_PROCESSED
+}
+
