@@ -65,6 +65,10 @@ model Order {
   // POS checkout: cash/card amount received and change (set for source=POS)
   amountTendered     Float?
   changeGiven        Float?
+
+  paymentStatus           PaymentStatus @default(PAID)
+  paymentMethod           String?
+  stripeCheckoutSessionId String?       @unique
   
   customer           Customer?   @relation(fields: [customerId], references: [id])
   items              OrderItem[]
@@ -98,6 +102,18 @@ model Notification {
   message   String
   read      Boolean          @default(false)
   createdAt DateTime         @default(now())
+}
+
+// Temporary payload while customer completes Stripe Checkout (webhook fulfills into Order).
+model CheckoutSessionHold {
+  id              String   @id @default(cuid())
+  idempotencyKey  String   @unique
+  payload         Json
+  stripeSessionId String?  @unique
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+
+  @@index([expiresAt])
 }
 
 model Customer {
@@ -137,6 +153,13 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+}
+
+enum PaymentStatus {
+  AWAITING_PAYMENT
+  PAID
+  FAILED
+  REFUNDED
 }
 
 enum NotificationType {

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useCart } from "@/lib/cart-context"
-import { CreditCard, Wallet, Building2, Lock, Loader2, AlertCircle } from "lucide-react"
+import { CreditCard, Wallet, Lock, Loader2, AlertCircle } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -18,7 +18,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart, validateCart, isLoaded } = useCart()
   const router = useRouter()
-  const [paymentMethod, setPaymentMethod] = useState("card")
+  /** `cod` = cash on delivery / settle at fulfilment; `stripe` = redirect to Stripe Checkout (requires env). */
+  const [checkoutMode, setCheckoutMode] = useState<"cod" | "stripe">("cod")
+  const stripeEnabled =
+    typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string" &&
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.length > 0
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
       return (crypto as any).randomUUID()
@@ -46,9 +50,8 @@ export default function CheckoutPage() {
     setError(null)
 
     try {
-      // Validate cart stock before proceeding
       const validation = await validateCart()
-      
+
       if (!validation.valid) {
         setError(
           `Some items in your cart are no longer available:\n${validation.errors.join('\n')}\n\nPlease update your cart and try again.`
@@ -59,7 +62,7 @@ export default function CheckoutPage() {
 
       const form = e.currentTarget as HTMLFormElement
       const formData = new FormData(form)
-      
+
       const firstName = formData.get("firstName") as string
       const lastName = formData.get("lastName") as string
       const email = formData.get("email") as string
@@ -71,21 +74,42 @@ export default function CheckoutPage() {
       const country = formData.get("country") as string
 
       const shippingAddress = `${address}, ${city}, ${state} ${zip}, ${country}`
+      const customerName = `${firstName} ${lastName}`
 
-      // Create order via API
-      const { ordersApi } = await import("@/lib/api-client")
-      await ordersApi.create({
-        source: "ONLINE",
-        items: items.map(item => ({
-          productId: item.productId || item.id.toString(), // Use productId if available, otherwise convert id to string
-          quantity: item.quantity,
-        })),
-        total: totalPrice,
-        customerName: `${firstName} ${lastName}`,
-        customerEmail: email,
-        customerPhone: phone,
-        shippingAddress,
-      }, idempotencyKey)
+      const lineItems = items.map((item) => ({
+        productId: item.productId || item.id.toString(),
+        quantity: item.quantity,
+      }))
+
+      const { ordersApi, checkoutApi } = await import("@/lib/api-client")
+
+      if (checkoutMode === "stripe" && stripeEnabled) {
+        const { url } = await checkoutApi.createStripeSession(
+          {
+            items: lineItems,
+            customerName,
+            customerEmail: email,
+            customerPhone: phone,
+            shippingAddress,
+          },
+          idempotencyKey
+        )
+        window.location.href = url
+        return
+      }
+
+      await ordersApi.create(
+        {
+          source: "ONLINE",
+          items: lineItems,
+          customerName,
+          customerEmail: email,
+          customerPhone: phone,
+          shippingAddress,
+          paymentMethod: checkoutMode === "cod" ? "cod" : "instant_checkout",
+        },
+        idempotencyKey
+      )
 
       clearCart()
       router.push("/order-confirmation")
@@ -209,50 +233,45 @@ export default function CheckoutPage() {
                     <CardTitle className="text-lg font-medium tracking-wide">PAYMENT METHOD</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <RadioGroup
+                      value={checkoutMode}
+                      onValueChange={(v) => setCheckoutMode(v as "cod" | "stripe")}
+                    >
                       <div className="flex items-center space-x-3 p-4 border border-border rounded cursor-pointer hover:bg-muted">
-                        <RadioGroupItem value="card" id="card" />
-                        <Label htmlFor="card" className="flex items-center gap-2 cursor-pointer flex-1">
-                          <CreditCard className="h-5 w-5" />
-                          Credit / Debit Card
-                        </Label>
-                      </div>
-
-                      <div className="flex items-center space-x-3 p-4 border border-border rounded cursor-pointer hover:bg-muted">
-                        <RadioGroupItem value="paypal" id="paypal" />
-                        <Label htmlFor="paypal" className="flex items-center gap-2 cursor-pointer flex-1">
+                        <RadioGroupItem value="cod" id="cod" />
+                        <Label htmlFor="cod" className="flex items-center gap-2 cursor-pointer flex-1">
                           <Wallet className="h-5 w-5" />
-                          PayPal
+                          <span>
+                            Cash on delivery / pay in store when you collect
+                            <span className="block text-xs text-muted-foreground font-normal mt-1">
+                              Inventory is updated as soon as you place the order.
+                            </span>
+                          </span>
                         </Label>
                       </div>
 
-                      <div className="flex items-center space-x-3 p-4 border border-border rounded cursor-pointer hover:bg-muted">
-                        <RadioGroupItem value="bank" id="bank" />
-                        <Label htmlFor="bank" className="flex items-center gap-2 cursor-pointer flex-1">
-                          <Building2 className="h-5 w-5" />
-                          Bank Transfer
-                        </Label>
-                      </div>
+                      {stripeEnabled && (
+                        <div className="flex items-center space-x-3 p-4 border border-border rounded cursor-pointer hover:bg-muted">
+                          <RadioGroupItem value="stripe" id="stripe" />
+                          <Label htmlFor="stripe" className="flex items-center gap-2 cursor-pointer flex-1">
+                            <CreditCard className="h-5 w-5" />
+                            <span>
+                              Pay now with card (Stripe Checkout)
+                              <span className="block text-xs text-muted-foreground font-normal mt-1">
+                                Secure redirect — payment captured before the order is finalised in the shop.
+                              </span>
+                            </span>
+                          </Label>
+                        </div>
+                      )}
                     </RadioGroup>
 
-                    {paymentMethod === "card" && (
-                      <div className="space-y-4 pt-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="cardNumber">Card Number</Label>
-                          <Input id="cardNumber" placeholder="1234 5678 9012 3456" required />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="expiry">Expiry Date</Label>
-                            <Input id="expiry" placeholder="MM/YY" required />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="cvv">CVV</Label>
-                            <Input id="cvv" placeholder="123" required />
-                          </div>
-                        </div>
-                      </div>
+                    {!stripeEnabled && (
+                      <p className="text-sm text-muted-foreground font-light">
+                        Card payments via Stripe appear here when{" "}
+                        <code className="text-xs">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> and{" "}
+                        <code className="text-xs">STRIPE_SECRET_KEY</code> are configured.
+                      </p>
                     )}
                   </CardContent>
                 </Card>

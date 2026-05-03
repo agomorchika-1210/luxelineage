@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit, rateLimitKey } from './lib/rate-limit'
 
 function getAllowedOrigins(): string[] {
   const raw = process.env.CORS_ALLOW_ORIGINS || ''
@@ -16,17 +17,20 @@ const protectedApiRoutes = [
   '/api/notifications', // All operations
 ]
 
-// Public API routes (read-only or specific endpoints)
-const publicApiRoutes = [
-  '/api/products', // GET is public
-  '/api/orders',  // POST (for checkout) is public
-  '/api/auth',    // Auth endpoints are public
-]
-
 // Check if route requires authentication
 function requiresAuth(pathname: string, method: string): boolean {
   // Auth endpoints are always public
   if (pathname.startsWith('/api/auth')) {
+    return false
+  }
+
+  // Guest order tracking
+  if (pathname === '/api/orders/track' && method === 'GET') {
+    return false
+  }
+
+  // Stripe webhook verifies via signature, not Bearer token
+  if (pathname === '/api/webhooks/stripe' && method === 'POST') {
     return false
   }
 
@@ -81,6 +85,35 @@ export async function middleware(request: NextRequest) {
     // Handle preflight requests
     if (method === 'OPTIONS') {
       return new NextResponse(null, { status: 200, headers: response.headers })
+    }
+
+    // --- Rate limits (best-effort; see lib/rate-limit.ts) ---
+    if (method === 'POST' && pathname === '/api/auth/login') {
+      const rl = rateLimit(rateLimitKey(request, 'auth-login'), 25, 60_000)
+      if (!rl.ok) {
+        return NextResponse.json(
+          { error: 'Too many requests', retryAfter: rl.retryAfterSec },
+          { status: 429, headers: response.headers }
+        )
+      }
+    }
+    if (method === 'POST' && pathname === '/api/orders') {
+      const rl = rateLimit(rateLimitKey(request, 'orders-post'), 45, 60_000)
+      if (!rl.ok) {
+        return NextResponse.json(
+          { error: 'Too many requests', retryAfter: rl.retryAfterSec },
+          { status: 429, headers: response.headers }
+        )
+      }
+    }
+    if (method === 'POST' && pathname === '/api/checkout/stripe-session') {
+      const rl = rateLimit(rateLimitKey(request, 'stripe-checkout'), 20, 60_000)
+      if (!rl.ok) {
+        return NextResponse.json(
+          { error: 'Too many requests', retryAfter: rl.retryAfterSec },
+          { status: 429, headers: response.headers }
+        )
+      }
     }
 
     // Check if route requires authentication

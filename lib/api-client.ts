@@ -294,6 +294,58 @@ export const ordersApi = {
   getReceipt: (id: string) => apiRequest<any>(`/orders/${id}/receipt`),
 }
 
+/** Stripe Checkout session + guest order lookup (no admin auth). */
+export const checkoutApi = {
+  createStripeSession: async (
+    body: {
+      items: { productId: string; quantity: number }[]
+      customerName?: string
+      customerEmail: string
+      customerPhone?: string
+      shippingAddress?: string
+    },
+    idempotencyKey: string
+  ) => {
+    const res = await fetch(`${API_BASE}/checkout/stripe-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-idempotency-key': idempotencyKey,
+      },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error((data as { error?: string }).error || `HTTP ${res.status}`)
+    }
+    return data as { url: string; sessionId?: string; resumed?: boolean }
+  },
+  getOrderFromSession: async (sessionId: string) => {
+    const res = await fetch(
+      `${API_BASE}/checkout/order-from-session?session_id=${encodeURIComponent(sessionId)}`,
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error((err as { error?: string }).error || `HTTP ${res.status}`)
+    }
+    return res.json() as Promise<{ pending: boolean; order?: any }>
+  },
+}
+
+/** Guest order status by ID + email (must match order). */
+export async function trackGuestOrder(orderId: string, email: string) {
+  const params = new URLSearchParams({ orderId, email })
+  const res = await fetch(`${API_BASE}/orders/track?${params.toString()}`, {
+    headers: { 'Content-Type': 'application/json' },
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || `HTTP ${res.status}`)
+  }
+  return data
+}
+
 // Sales API
 export const salesApi = {
   getAll: (startDate?: string, endDate?: string) => {

@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/middleware'
 import { ApiError, parseJson } from '@/lib/api-helpers'
+import { fulfillOrderInTransaction } from '@/lib/online-order'
+import type { PaymentStatus as PaymentStatusT } from '@prisma/client'
 import { z } from 'zod'
+
+const PAYMENT_STATUS_FILTERS: PaymentStatusT[] = [
+  'AWAITING_PAYMENT',
+  'PAID',
+  'FAILED',
+  'REFUNDED',
+]
 
 const OrderCreateSchema = z.object({
   source: z.enum(['ONLINE', 'POS']).optional().default('ONLINE'),
@@ -16,6 +25,8 @@ const OrderCreateSchema = z.object({
   customerEmail: z.string().email().optional(),
   customerPhone: z.string().optional(),
   shippingAddress: z.string().optional(),
+  /** How the shopper is paying for ONLINE orders (stored for analytics / reconciliation). */
+  paymentMethod: z.enum(['instant_checkout', 'cod']).optional().default('instant_checkout'),
 })
 
 // GET /api/orders - List orders (admin only, can filter by status).
@@ -33,6 +44,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
+    const paymentStatus = searchParams.get('paymentStatus')
     const source = searchParams.get('source')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
@@ -44,6 +56,12 @@ export async function GET(request: NextRequest) {
     }
     if (status) {
       where.status = status.toUpperCase()
+    }
+    if (paymentStatus) {
+      const v = paymentStatus.toUpperCase() as PaymentStatusT
+      if (PAYMENT_STATUS_FILTERS.includes(v)) {
+        where.paymentStatus = v
+      }
     }
     if (source) {
       where.source = source.toUpperCase()
@@ -111,7 +129,15 @@ export async function POST(request: NextRequest) {
     const idempotencyKey =
       request.headers.get('x-idempotency-key')?.trim() || undefined
     const data = await parseJson(request, OrderCreateSchema)
-    const { source, items, customerName, customerEmail, customerPhone, shippingAddress } = data
+    const {
+      source,
+      items,
+      customerName,
+      customerEmail,
+      customerPhone,
+      shippingAddress,
+      paymentMethod,
+    } = data
     const normalizedSource = source
 
     if (idempotencyKey) {
@@ -128,149 +154,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Inventory rules by channel (each unit leaves stock exactly once when the order/sale is created):
-    // - ONLINE (shop): decrement at checkout so the web store cannot oversell; admin "Process" only
-    //   records fulfillment + sale — it does not touch stock again.
-    // - POS: also decrement here when this endpoint is used with source POS (legacy). The admin
-    //   POS screen should prefer POST /api/sales/pos, which uses the same stock rules in one place.
+    // ONLINE + POS: decrement stock when the order is committed (same oversell protection).
     const result = await prisma.$transaction(async (tx) => {
-      // Fetch all products in a single query for efficiency
-      const productIds = items.map((item: any) => item.productId)
-      const products = await tx.product.findMany({
-        where: { id: { in: productIds } }
+      return fulfillOrderInTransaction(tx, {
+        idempotencyKey,
+        source: normalizedSource,
+        items,
+        customerName,
+        customerEmail,
+        customerPhone,
+        shippingAddress,
+        paymentStatus: 'PAID',
+        paymentMethod:
+          normalizedSource === 'ONLINE' ? paymentMethod : 'pos',
+        stripeCheckoutSessionId: null,
+        decrementStock: true,
       })
-
-      // Create a map for quick lookup
-      const productMap = new Map(products.map(p => [p.id, p]))
-
-      // Validate products exist and prepare order items (also compute totals)
-      let calculatedTotal = 0
-      const orderItemsData = items.map((item: any) => {
-        const product = productMap.get(item.productId)
-        if (!product) {
-          throw new ApiError(`Product ${item.productId} not found`, 400)
-        }
-
-        calculatedTotal += product.price * item.quantity
-        return {
-          productId: product.id,
-          quantity: item.quantity,
-          price: product.price,
-          cost: product.cost || 0
-        }
-      })
-
-      if (!calculatedTotal || calculatedTotal <= 0) {
-        throw new ApiError('Order total must be greater than 0', 400)
-      }
-
-      // ONLINE + POS: decrement stock atomically per line (same oversell protection).
-      if (normalizedSource === 'ONLINE' || normalizedSource === 'POS') {
-        for (const item of orderItemsData) {
-          const updated = await tx.product.updateMany({
-            where: {
-              id: item.productId,
-              stockQuantity: { gte: item.quantity }
-            },
-            data: {
-              stockQuantity: { decrement: item.quantity }
-            }
-          })
-
-          if (updated.count !== 1) {
-            const product = productMap.get(item.productId)
-            const name = product?.name || item.productId
-            const available = product?.stockQuantity
-            throw new ApiError(
-              `Insufficient stock for ${name}. Available: ${available ?? 'unknown'}, Requested: ${item.quantity}`
-              , 400
-            )
-          }
-        }
-      }
-
-      // Create or find customer for online orders
-      let customerId: string | null = null
-      if (normalizedSource === 'ONLINE' && customerEmail) {
-        const existingCustomer = await tx.customer.findUnique({
-          where: { email: customerEmail }
-        })
-
-        if (existingCustomer) {
-          customerId = existingCustomer.id
-          if (customerName || customerPhone || shippingAddress) {
-            const nameParts = customerName?.split(' ') || []
-            await tx.customer.update({
-              where: { id: customerId },
-              data: {
-                fullName: customerName || existingCustomer.fullName,
-                firstName: nameParts[0] || existingCustomer.firstName,
-                lastName: nameParts.slice(1).join(' ') || existingCustomer.lastName,
-                phone: customerPhone || existingCustomer.phone,
-                ...(shippingAddress && {
-                  address: shippingAddress.split(',')[0] || existingCustomer.address,
-                  city: shippingAddress.split(',')[1]?.trim() || existingCustomer.city,
-                  state: shippingAddress.split(',')[2]?.trim() || existingCustomer.state,
-                  zip: shippingAddress.split(',')[3]?.trim() || existingCustomer.zip,
-                })
-              }
-            })
-          }
-        } else {
-          const nameParts = customerName?.split(' ') || []
-          const newCustomer = await tx.customer.create({
-            data: {
-              email: customerEmail,
-              phone: customerPhone || null,
-              fullName: customerName || 'Unknown',
-              firstName: nameParts[0] || null,
-              lastName: nameParts.slice(1).join(' ') || null,
-              ...(shippingAddress && {
-                address: shippingAddress.split(',')[0] || null,
-                city: shippingAddress.split(',')[1]?.trim() || null,
-                state: shippingAddress.split(',')[2]?.trim() || null,
-                zip: shippingAddress.split(',')[3]?.trim() || null,
-              })
-            }
-          })
-          customerId = newCustomer.id
-        }
-      }
-
-      // Create order
-      const order = await tx.order.create({
-        data: {
-          idempotencyKey,
-          source: normalizedSource,
-          // POS orders created via this endpoint are treated as PROCESSED (legacy path).
-          // ONLINE orders start as PENDING.
-          status: normalizedSource === 'POS' ? 'PROCESSED' : 'PENDING',
-          total: calculatedTotal,
-          customerId,
-          customerName,
-          customerEmail,
-          customerPhone,
-          shippingAddress,
-          items: { create: orderItemsData }
-        },
-        include: {
-          items: { include: { product: true } },
-          customer: true
-        }
-      })
-
-      // If POS, create sale immediately (legacy behavior).
-      if (normalizedSource === 'POS') {
-        await tx.sale.create({
-          data: {
-            orderId: order.id,
-            source: 'POS',
-            total: order.total
-          }
-        })
-      }
-
-      return order
     })
 
     if (normalizedSource !== 'POS') {

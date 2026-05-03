@@ -71,8 +71,16 @@ Fashion e-commerce storefront with an admin dashboard (inventory, sales/POS, ord
 
 ## Documentation
 
-- **`PRODUCTION_READINESS.md`** — deployment checklist, env vars, auth/stock notes, and recent production-oriented changes.
+- **`PRODUCTION_READINESS.md`** — deployment checklist, env vars, auth/stock notes, Stripe/guest tracking/rate limits, and recent production-oriented changes.
 - Other audit/fix logs in the repo (`FIXES_LOG.md`, module audit markdown files) capture historical changes.
+
+## Optional: Stripe card checkout
+
+Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, and configure **`POST /api/webhooks/stripe`** in the Stripe Dashboard (same secret as `STRIPE_WEBHOOK_SECRET`). Use `NEXT_PUBLIC_APP_URL` in production so success/cancel URLs are correct.
+
+## Guest order lookup
+
+Customers can open **`/track-order`** with order id and email (same email used at checkout).
 
 ## License
 

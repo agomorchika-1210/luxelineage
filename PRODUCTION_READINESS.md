@@ -48,6 +48,30 @@ Optional:
 - This branch was pushed to `https://github.com/agomorchika-1210/luxelineage` with production-prep files included.
 - In GitHub: **Actions** should run **CI** on the next push; enable Actions for the repository if it is disabled for private repos.
 
+## Suggested improvements (implemented after initial production prep)
+
+This section documents the **feature work** that followed the first “production prep” commit (CI, `.env.example`, README), based on the project review: payments, payment state, guest order access, rate limiting, and a minimal test suite.
+
+| Area | What was added |
+|------|----------------|
+| **Payment state** | `PaymentStatus` enum on `Order` (`AWAITING_PAYMENT`, `PAID`, `FAILED`, `REFUNDED`), optional `paymentMethod` and `stripeCheckoutSessionId`. `GET /api/orders` supports `?paymentStatus=` for admin filtering. |
+| **Shared fulfillment** | `lib/online-order.ts` — `fulfillOrderInTransaction()` used by `POST /api/orders` and the Stripe webhook so stock rules stay in one place. |
+| **Stripe Checkout** | `POST /api/checkout/stripe-session` creates a **CheckoutSessionHold** and redirects the browser to Stripe. `POST /api/webhooks/stripe` verifies the signature, creates the `Order` (decrements stock), and sends `ORDER_PLACED`. Requires `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and (for the button) `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Currency via `STRIPE_CURRENCY` (default `usd`). Redirect base URL: `NEXT_PUBLIC_APP_URL` or `VERCEL_URL`. |
+| **Checkout UX** | Checkout replaces fake card fields with **Cash on delivery** vs **Stripe** (when publishable key is set). COD uses `paymentMethod: cod`; Stripe path redirects without clearing the cart until confirmation. |
+| **Order confirmation** | After Stripe, `/order-confirmation?session_id=` polls `GET /api/checkout/order-from-session` until the webhook creates the order, then clears the cart and shows the real order id. |
+| **Guest tracking** | `GET /api/orders/track?orderId=&email=` and storefront page **`/track-order`**. |
+| **Rate limiting** | `lib/rate-limit.ts` + middleware: limits on `POST /api/auth/login`, `POST /api/orders`, `POST /api/checkout/stripe-session` (best-effort; resets on cold start in serverless). |
+| **Database** | `CheckoutSessionHold` model; SQL helper `add-payment-checkout-hold.sql` for hosts that do not use `prisma db push`. |
+| **Tests** | Vitest + `lib/rate-limit.test.ts`; `npm run test`; CI runs tests before build. |
+
+### Still not implemented (from the review)
+
+- Full **customer accounts** (shopper login) and saved addresses.
+- **Transactional email** (Resend / SendGrid).
+- **Carrier / shipping labels**.
+- **Promotions / coupons** schema and checkout validation.
+- **Audit log** for admin actions.
+
 ## Known gaps (not in scope of this pass)
 
 - Payment gateway (Stripe/Paystack, etc.) — checkout is still order placement without PSP capture.
