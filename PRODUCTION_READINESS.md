@@ -43,6 +43,11 @@ Optional:
 5. Ensure `SUPABASE_SERVICE_ROLE_KEY` matches the same Supabase project as `NEXT_PUBLIC_SUPABASE_URL`.
 6. Add monitoring (e.g. Sentry), backups, and rate limiting for auth/checkout when you scale.
 
+## Git and CI
+
+- This branch was pushed to `https://github.com/agomorchika-1210/luxelineage` with production-prep files included.
+- In GitHub: **Actions** should run **CI** on the next push; enable Actions for the repository if it is disabled for private repos.
+
 ## Known gaps (not in scope of this pass)
 
 - Payment gateway (Stripe/Paystack, etc.) — checkout is still order placement without PSP capture.
