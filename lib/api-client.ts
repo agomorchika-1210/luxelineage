@@ -294,9 +294,9 @@ export const ordersApi = {
   getReceipt: (id: string) => apiRequest<any>(`/orders/${id}/receipt`),
 }
 
-/** Stripe Checkout session + guest order lookup (no admin auth). */
+/** Paystack redirect + status polling (no admin auth). */
 export const checkoutApi = {
-  createStripeSession: async (
+  initializePaystack: async (
     body: {
       items: { productId: string; quantity: number }[]
       customerName?: string
@@ -306,7 +306,7 @@ export const checkoutApi = {
     },
     idempotencyKey: string
   ) => {
-    const res = await fetch(`${API_BASE}/checkout/stripe-session`, {
+    const res = await fetch(`${API_BASE}/checkout/paystack/initialize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -318,18 +318,22 @@ export const checkoutApi = {
     if (!res.ok) {
       throw new Error((data as { error?: string }).error || `HTTP ${res.status}`)
     }
-    return data as { url: string; sessionId?: string; resumed?: boolean }
+    return data as { authorizationUrl: string; reference: string }
   },
-  getOrderFromSession: async (sessionId: string) => {
+  getPaystackStatus: async (reference: string) => {
     const res = await fetch(
-      `${API_BASE}/checkout/order-from-session?session_id=${encodeURIComponent(sessionId)}`,
+      `${API_BASE}/checkout/paystack/status?reference=${encodeURIComponent(reference)}`,
       { headers: { 'Content-Type': 'application/json' } }
     )
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       throw new Error((err as { error?: string }).error || `HTTP ${res.status}`)
     }
-    return res.json() as Promise<{ pending: boolean; order?: any }>
+    return res.json() as Promise<{
+      pending: boolean
+      order?: any
+      reason?: string
+    }>
   },
 }
 

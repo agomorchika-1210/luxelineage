@@ -13,16 +13,19 @@ import { useCart } from "@/lib/cart-context"
 
 function OrderConfirmationInner() {
   const searchParams = useSearchParams()
-  const sessionId = searchParams.get("session_id")
+  const reference =
+    searchParams.get("reference") ||
+    searchParams.get("trxref") ||
+    undefined
   const { clearCart } = useCart()
 
   const [orderId, setOrderId] = useState<string | null>(null)
-  const [pending, setPending] = useState(!!sessionId)
+  const [pending, setPending] = useState(!!reference)
   const [pollError, setPollError] = useState<string | null>(null)
   const cleared = useRef(false)
 
   useEffect(() => {
-    if (!sessionId) return
+    if (!reference) return
 
     let cancelled = false
     let attempts = 0
@@ -33,7 +36,7 @@ function OrderConfirmationInner() {
       while (!cancelled && attempts < maxAttempts) {
         attempts += 1
         try {
-          const res = await checkoutApi.getOrderFromSession(sessionId)
+          const res = await checkoutApi.getPaystackStatus(reference)
           if (!res.pending && res.order?.id) {
             setOrderId(res.order.id)
             setPending(false)
@@ -62,11 +65,9 @@ function OrderConfirmationInner() {
     return () => {
       cancelled = true
     }
-  }, [sessionId, clearCart])
+  }, [reference, clearCart])
 
-  const displayId =
-    orderId ||
-    (!sessionId ? "pending" : null)
+  const displayId = orderId || (!reference ? undefined : null)
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -94,13 +95,13 @@ function OrderConfirmationInner() {
               : "Thank you for your purchase! Your order has been recorded."}
           </p>
 
-          {!pending && displayId && displayId !== "pending" && (
+          {!pending && displayId && (
             <p className="text-sm text-muted-foreground font-light mb-8">
               Order ID: <span className="font-mono">{displayId}</span>
             </p>
           )}
 
-          {!sessionId && !orderId && (
+          {!reference && !orderId && (
             <p className="text-sm text-muted-foreground font-light mb-8">
               Save your confirmation details. You can track status with your email on the{" "}
               <Link href="/track-order" className="underline">

@@ -54,14 +54,14 @@ This section documents the **feature work** that followed the first “productio
 
 | Area | What was added |
 |------|----------------|
-| **Payment state** | `PaymentStatus` enum on `Order` (`AWAITING_PAYMENT`, `PAID`, `FAILED`, `REFUNDED`), optional `paymentMethod` and `stripeCheckoutSessionId`. `GET /api/orders` supports `?paymentStatus=` for admin filtering. |
-| **Shared fulfillment** | `lib/online-order.ts` — `fulfillOrderInTransaction()` used by `POST /api/orders` and the Stripe webhook so stock rules stay in one place. |
-| **Stripe Checkout** | `POST /api/checkout/stripe-session` creates a **CheckoutSessionHold** and redirects the browser to Stripe. `POST /api/webhooks/stripe` verifies the signature, creates the `Order` (decrements stock), and sends `ORDER_PLACED`. Requires `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and (for the button) `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Currency via `STRIPE_CURRENCY` (default `usd`). Redirect base URL: `NEXT_PUBLIC_APP_URL` or `VERCEL_URL`. |
-| **Checkout UX** | Checkout replaces fake card fields with **Cash on delivery** vs **Stripe** (when publishable key is set). COD uses `paymentMethod: cod`; Stripe path redirects without clearing the cart until confirmation. |
-| **Order confirmation** | After Stripe, `/order-confirmation?session_id=` polls `GET /api/checkout/order-from-session` until the webhook creates the order, then clears the cart and shows the real order id. |
-| **Guest tracking** | `GET /api/orders/track?orderId=&email=` and storefront page **`/track-order`**. |
-| **Rate limiting** | `lib/rate-limit.ts` + middleware: limits on `POST /api/auth/login`, `POST /api/orders`, `POST /api/checkout/stripe-session` (best-effort; resets on cold start in serverless). |
-| **Database** | `CheckoutSessionHold` model; SQL helper `add-payment-checkout-hold.sql` for hosts that do not use `prisma db push`. |
+| **Payment state** | `PaymentStatus` enum on `Order` (`AWAITING_PAYMENT`, `PAID`, `FAILED`, `REFUNDED`), optional `paymentMethod` and `paystackReference`. `GET /api/orders` supports `?paymentStatus=` for admin filtering. |
+| **Shared fulfillment** | `lib/online-order.ts` — `fulfillOrderInTransaction()` used by `POST /api/orders` and Paystack fulfillment so stock rules stay in one place. |
+| **Paystack** | `POST /api/checkout/paystack/initialize` creates a **CheckoutSessionHold**, initializes a Paystack transaction, returns **`authorizationUrl`**. Customer pays on Paystack; **`POST /api/webhooks/paystack`** (and **`GET /api/checkout/paystack/status`** polling after redirect) verify payment and create the `Order` (decrement stock). Requires **`PAYSTACK_SECRET_KEY`**, **`NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`** (to show the Paystack option), webhook endpoint in the Paystack dashboard, and **`NEXT_PUBLIC_APP_URL`** for redirects. Currency: **`PAYSTACK_CURRENCY`** (default **`NGN`**); amounts use Paystack subunits (helper in `lib/paystack-server.ts`). Implementation files: `lib/paystack-server.ts`, `lib/paystack-fulfill.ts`. |
+| **Checkout UX** | **Cash on delivery** vs **Pay with Paystack** when the public key is set. COD uses `paymentMethod: cod`. Paystack path redirects and clears the cart only after confirmation. |
+| **Order confirmation** | After Paystack, `/order-confirmation?reference=` (or `trxref`) polls **`GET /api/checkout/paystack/status`** until the order exists. |
+| **Guest tracking** | `GET /api/orders/track?orderId=&email=` and storefront **`/track-order`**. |
+| **Rate limiting** | `lib/rate-limit.ts` + middleware: limits on `POST /api/auth/login`, `POST /api/orders`, `POST /api/checkout/paystack/initialize` (best-effort; resets on cold start in serverless). |
+| **Database** | `CheckoutSessionHold.paystackReference`; SQL helper **`add-payment-checkout-hold.sql`** (includes rename from legacy Stripe column names if present). |
 | **Tests** | Vitest + `lib/rate-limit.test.ts`; `npm run test`; CI runs tests before build. |
 
 ### Still not implemented (from the review)
@@ -74,7 +74,7 @@ This section documents the **feature work** that followed the first “productio
 
 ## Known gaps (not in scope of this pass)
 
-- Payment gateway (Stripe/Paystack, etc.) — checkout is still order placement without PSP capture.
+- **Paystack** is integrated for online pay; configure keys and webhooks in production. Refunds, split payments, and Paystack **Transfer** are not automated in-app yet.
 - Shopper accounts and order history for customers.
 - Email/SMS transactional notifications.
 - Full audit log of admin actions.

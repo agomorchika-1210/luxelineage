@@ -66,9 +66,9 @@ model Order {
   amountTendered     Float?
   changeGiven        Float?
 
-  paymentStatus           PaymentStatus @default(PAID)
-  paymentMethod           String?
-  stripeCheckoutSessionId String?       @unique
+  paymentStatus      PaymentStatus @default(PAID)
+  paymentMethod      String?
+  paystackReference  String?       @unique
   
   customer           Customer?   @relation(fields: [customerId], references: [id])
   items              OrderItem[]
@@ -104,14 +104,14 @@ model Notification {
   createdAt DateTime         @default(now())
 }
 
-// Temporary payload while customer completes Stripe Checkout (webhook fulfills into Order).
+// Payload while customer completes Paystack payment (webhook / verify fulfills into Order).
 model CheckoutSessionHold {
-  id              String   @id @default(cuid())
-  idempotencyKey  String   @unique
-  payload         Json
-  stripeSessionId String?  @unique
-  createdAt       DateTime @default(now())
-  expiresAt       DateTime
+  id                String   @id @default(cuid())
+  idempotencyKey    String   @unique
+  payload           Json
+  paystackReference String?  @unique
+  createdAt         DateTime @default(now())
+  expiresAt         DateTime
 
   @@index([expiresAt])
 }

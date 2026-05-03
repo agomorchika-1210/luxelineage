@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ApiError, parseJson } from '@/lib/api-helpers'
-import { getStripe, appBaseUrl } from '@/lib/stripe-server'
+import {
+  appBaseUrl,
+  getPaystackSecretKey,
+  majorToPaystackSubunit,
+  paystackInitialize,
+} from '@/lib/paystack-server'
 
 const BodySchema = z.object({
   items: z
@@ -19,12 +24,21 @@ const BodySchema = z.object({
   shippingAddress: z.string().optional(),
 })
 
-// POST /api/checkout/stripe-session — creates Stripe Checkout; stock is decremented in the webhook after payment.
+/** Matches storefront checkout: 10% tax, free shipping (see app/checkout/page.tsx). */
+function totalsFromProducts(
+  items: { price: number; quantity: number }[]
+): { subtotal: number; tax: number; total: number } {
+  const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
+  const tax = subtotal * 0.1
+  const total = subtotal + tax
+  return { subtotal, tax, total }
+}
+
+// POST /api/checkout/paystack/initialize — opens Paystack redirect flow; order created after successful payment.
 export async function POST(request: NextRequest) {
-  const stripe = getStripe()
-  if (!stripe) {
+  if (!getPaystackSecretKey()) {
     return NextResponse.json(
-      { error: 'Stripe is not configured (STRIPE_SECRET_KEY missing)' },
+      { error: 'Paystack is not configured (PAYSTACK_SECRET_KEY missing)' },
       { status: 503 }
     )
   }
@@ -40,8 +54,13 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await parseJson(request, BodySchema)
-    const { items, customerName, customerEmail, customerPhone, shippingAddress } =
-      data
+    const {
+      items,
+      customerName,
+      customerEmail,
+      customerPhone,
+      shippingAddress,
+    } = data
 
     const existingOrder = await prisma.order.findUnique({
       where: { idempotencyKey },
@@ -59,21 +78,17 @@ export async function POST(request: NextRequest) {
     const priorHold = await prisma.checkoutSessionHold.findUnique({
       where: { idempotencyKey },
     })
-    if (priorHold) {
-      if (priorHold.expiresAt < new Date()) {
-        await prisma.checkoutSessionHold.delete({ where: { id: priorHold.id } })
-      } else if (priorHold.stripeSessionId) {
-        const existing = await stripe.checkout.sessions.retrieve(
-          priorHold.stripeSessionId
+    if (priorHold && priorHold.expiresAt >= new Date()) {
+      if (priorHold.paystackReference) {
+        return NextResponse.json(
+          {
+            error:
+              'A Paystack payment is already in progress for this checkout. Complete it or wait for it to expire.',
+          },
+          { status: 409 }
         )
-        if (existing.url && existing.status === 'open') {
-          return NextResponse.json({
-            url: existing.url,
-            sessionId: existing.id,
-            resumed: true,
-          })
-        }
       }
+      await prisma.checkoutSessionHold.delete({ where: { id: priorHold.id } })
     }
 
     const productIds = items.map((i) => i.productId)
@@ -82,6 +97,7 @@ export async function POST(request: NextRequest) {
     })
     const productMap = new Map(products.map((p) => [p.id, p]))
 
+    const pricedLines: { price: number; quantity: number }[] = []
     for (const line of items) {
       const p = productMap.get(line.productId)
       if (!p) {
@@ -93,7 +109,12 @@ export async function POST(request: NextRequest) {
           400
         )
       }
+      pricedLines.push({ price: p.price, quantity: line.quantity })
     }
+
+    const { total } = totalsFromProducts(pricedLines)
+
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
 
     const payload = {
       idempotencyKey,
@@ -105,8 +126,6 @@ export async function POST(request: NextRequest) {
       shippingAddress,
     }
 
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
-
     const hold = await prisma.checkoutSessionHold.create({
       data: {
         idempotencyKey,
@@ -115,48 +134,45 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const currency = (process.env.STRIPE_CURRENCY || 'usd').toLowerCase()
-    const line_items = items.map((line) => {
-      const p = productMap.get(line.productId)!
-      return {
-        quantity: line.quantity,
-        price_data: {
-          currency,
-          unit_amount: Math.round(p.price * 100),
-          product_data: {
-            name: p.name,
-            metadata: { productId: p.id },
-          },
-        },
-      }
+    const reference = `lux_${hold.id.replace(/-/g, '').slice(0, 22)}_${Date.now()}`.slice(
+      0,
+      100
+    )
+
+    await prisma.checkoutSessionHold.update({
+      where: { id: hold.id },
+      data: { paystackReference: reference },
     })
 
+    const currency = (process.env.PAYSTACK_CURRENCY || 'NGN').trim()
+    const amountSubunit = majorToPaystackSubunit(total)
+
     const base = appBaseUrl()
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      success_url: `${base}/order-confirmation?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${base}/checkout?canceled=1`,
-      customer_email: customerEmail,
-      client_reference_id: idempotencyKey,
+    const callbackUrl = `${base}/order-confirmation`
+
+    const init = await paystackInitialize({
+      email: customerEmail,
+      amountSubunit,
+      currency,
+      reference,
+      callbackUrl,
       metadata: {
         holdId: hold.id,
         idempotencyKey,
       },
-      line_items,
     })
 
-    await prisma.checkoutSessionHold.update({
-      where: { id: hold.id },
-      data: { stripeSessionId: session.id },
-    })
-
-    if (!session.url) {
-      throw new ApiError('Stripe did not return a checkout URL', 500)
+    const authorizationUrl = init.data?.authorization_url
+    if (!authorizationUrl) {
+      throw new ApiError('Paystack did not return authorization_url', 500)
     }
 
-    return NextResponse.json({ url: session.url, sessionId: session.id })
+    return NextResponse.json({
+      authorizationUrl,
+      reference,
+    })
   } catch (error: any) {
-    console.error('[stripe-session]', error)
+    console.error('[paystack initialize]', error)
     if (error instanceof ApiError) {
       return NextResponse.json(
         { error: error.message, code: error.code },

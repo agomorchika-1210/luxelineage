@@ -13,14 +13,14 @@ export type FulfillOnlineOrderArgs = {
   shippingAddress?: string | null
   paymentStatus: PaymentStatus
   paymentMethod?: string | null
-  stripeCheckoutSessionId?: string | null
+  paystackReference?: string | null
   /** When false, stock is not touched (unused today; reserved for reservations). */
   decrementStock: boolean
 }
 
 /**
  * Shared transactional path for creating an order with optional stock decrement.
- * Used by POST /api/orders and Stripe webhook fulfillment.
+ * Used by POST /api/orders and Paystack fulfillment.
  */
 export async function fulfillOrderInTransaction(
   tx: Prisma.TransactionClient,
@@ -35,7 +35,7 @@ export async function fulfillOrderInTransaction(
     shippingAddress,
     paymentStatus,
     paymentMethod,
-    stripeCheckoutSessionId,
+    paystackReference,
     decrementStock,
     idempotencyKey,
   } = args
@@ -154,7 +154,7 @@ export async function fulfillOrderInTransaction(
       shippingAddress,
       paymentStatus,
       paymentMethod,
-      stripeCheckoutSessionId,
+      paystackReference,
       items: { create: orderItemsData },
     },
     include: {

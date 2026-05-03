@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
         paymentStatus: 'PAID',
         paymentMethod:
           normalizedSource === 'ONLINE' ? paymentMethod : 'pos',
-        stripeCheckoutSessionId: null,
+        paystackReference: null,
         decrementStock: true,
       })
     })

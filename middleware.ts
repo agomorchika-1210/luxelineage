@@ -29,8 +29,16 @@ function requiresAuth(pathname: string, method: string): boolean {
     return false
   }
 
-  // Stripe webhook verifies via signature, not Bearer token
-  if (pathname === '/api/webhooks/stripe' && method === 'POST') {
+  // Paystack webhook verifies via signature, not Bearer token
+  if (pathname === '/api/webhooks/paystack' && method === 'POST') {
+    return false
+  }
+
+  // Guest polling after Paystack redirect
+  if (
+    pathname === '/api/checkout/paystack/status' &&
+    method === 'GET'
+  ) {
     return false
   }
 
@@ -106,8 +114,8 @@ export async function middleware(request: NextRequest) {
         )
       }
     }
-    if (method === 'POST' && pathname === '/api/checkout/stripe-session') {
-      const rl = rateLimit(rateLimitKey(request, 'stripe-checkout'), 20, 60_000)
+    if (method === 'POST' && pathname === '/api/checkout/paystack/initialize') {
+      const rl = rateLimit(rateLimitKey(request, 'paystack-init'), 20, 60_000)
       if (!rl.ok) {
         return NextResponse.json(
           { error: 'Too many requests', retryAfter: rl.retryAfterSec },

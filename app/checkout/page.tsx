@@ -18,11 +18,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart, validateCart, isLoaded } = useCart()
   const router = useRouter()
-  /** `cod` = cash on delivery / settle at fulfilment; `stripe` = redirect to Stripe Checkout (requires env). */
-  const [checkoutMode, setCheckoutMode] = useState<"cod" | "stripe">("cod")
-  const stripeEnabled =
-    typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string" &&
-    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.length > 0
+  /** `cod` = cash on delivery; `paystack` = redirect to Paystack (requires env). */
+  const [checkoutMode, setCheckoutMode] = useState<"cod" | "paystack">("cod")
+  const paystackEnabled =
+    typeof process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY === "string" &&
+    process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY.length > 0
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
       return (crypto as any).randomUUID()
@@ -83,8 +83,8 @@ export default function CheckoutPage() {
 
       const { ordersApi, checkoutApi } = await import("@/lib/api-client")
 
-      if (checkoutMode === "stripe" && stripeEnabled) {
-        const { url } = await checkoutApi.createStripeSession(
+      if (checkoutMode === "paystack" && paystackEnabled) {
+        const { authorizationUrl } = await checkoutApi.initializePaystack(
           {
             items: lineItems,
             customerName,
@@ -94,7 +94,7 @@ export default function CheckoutPage() {
           },
           idempotencyKey
         )
-        window.location.href = url
+        window.location.href = authorizationUrl
         return
       }
 
@@ -235,7 +235,7 @@ export default function CheckoutPage() {
                   <CardContent className="space-y-4">
                     <RadioGroup
                       value={checkoutMode}
-                      onValueChange={(v) => setCheckoutMode(v as "cod" | "stripe")}
+                      onValueChange={(v) => setCheckoutMode(v as "cod" | "paystack")}
                     >
                       <div className="flex items-center space-x-3 p-4 border border-border rounded cursor-pointer hover:bg-muted">
                         <RadioGroupItem value="cod" id="cod" />
@@ -250,15 +250,15 @@ export default function CheckoutPage() {
                         </Label>
                       </div>
 
-                      {stripeEnabled && (
+                      {paystackEnabled && (
                         <div className="flex items-center space-x-3 p-4 border border-border rounded cursor-pointer hover:bg-muted">
-                          <RadioGroupItem value="stripe" id="stripe" />
-                          <Label htmlFor="stripe" className="flex items-center gap-2 cursor-pointer flex-1">
+                          <RadioGroupItem value="paystack" id="paystack" />
+                          <Label htmlFor="paystack" className="flex items-center gap-2 cursor-pointer flex-1">
                             <CreditCard className="h-5 w-5" />
                             <span>
-                              Pay now with card (Stripe Checkout)
+                              Pay now with Paystack (card, bank, USSD…)
                               <span className="block text-xs text-muted-foreground font-normal mt-1">
-                                Secure redirect — payment captured before the order is finalised in the shop.
+                                Secure redirect — payment confirmed before the order is recorded in the shop.
                               </span>
                             </span>
                           </Label>
@@ -266,11 +266,11 @@ export default function CheckoutPage() {
                       )}
                     </RadioGroup>
 
-                    {!stripeEnabled && (
+                    {!paystackEnabled && (
                       <p className="text-sm text-muted-foreground font-light">
-                        Card payments via Stripe appear here when{" "}
-                        <code className="text-xs">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> and{" "}
-                        <code className="text-xs">STRIPE_SECRET_KEY</code> are configured.
+                        Online card/bank payments via Paystack appear here when{" "}
+                        <code className="text-xs">NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY</code> and{" "}
+                        <code className="text-xs">PAYSTACK_SECRET_KEY</code> are configured.
                       </p>
                     )}
                   </CardContent>
