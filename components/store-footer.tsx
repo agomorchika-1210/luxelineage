@@ -19,26 +19,15 @@ export function StoreFooter() {
             <ul className="space-y-3">
               <li>
                 <Link
-                  href="/shop/business-wear"
+                  href="/shop"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Corporate Business Wear
+                  All Products
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/shop/casual"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Casual Wear
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/shop/footwear"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Footwear
+                <Link href="/collections" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Collections
                 </Link>
               </li>
               <li>
@@ -49,34 +38,21 @@ export function StoreFooter() {
             </ul>
           </div>
 
-          {/* Support */}
+          {/* Account */}
           <div>
-            <h4 className="text-sm font-medium tracking-wide mb-4">SUPPORT</h4>
+            <h4 className="text-sm font-medium tracking-wide mb-4">ACCOUNT</h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Contact Us
+                <Link href="/cart" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Shopping Cart
                 </Link>
               </li>
               <li>
                 <Link
-                  href="/shipping"
+                  href="/checkout"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Shipping & Returns
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/size-guide"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Size Guide
-                </Link>
-              </li>
-              <li>
-                <Link href="/faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  FAQ
+                  Checkout
                 </Link>
               </li>
             </ul>
@@ -92,18 +68,8 @@ export function StoreFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/careers" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Careers
-                </Link>
-              </li>
-              <li>
-                <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Terms of Service
+                <Link href="/admin/login" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Staff Login
                 </Link>
               </li>
             </ul>

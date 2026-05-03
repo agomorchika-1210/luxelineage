@@ -6,7 +6,33 @@ import { prisma } from '@/lib/prisma'
 // Creates a new admin user in Supabase Auth and database
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, role } = await request.json()
+    // SECURITY: Admin provisioning must not be publicly accessible in production.
+    // Gate this endpoint behind a bootstrap secret so only the shop owner/operator can create initial admins.
+    // Set `ADMIN_BOOTSTRAP_SECRET` in environment variables and send it as:
+    // - header:  x-admin-bootstrap-secret: <secret>
+    // - or body: bootstrapSecret: <secret>
+    const configuredSecret = process.env.ADMIN_BOOTSTRAP_SECRET
+    const headerSecret = request.headers.get('x-admin-bootstrap-secret') || undefined
+
+    const body = await request.json().catch(() => ({} as any))
+    const { email, password, role, bootstrapSecret } = body
+    const bodySecret = bootstrapSecret
+
+    if (configuredSecret) {
+      const provided = headerSecret || bodySecret
+      if (!provided || provided !== configuredSecret) {
+        return NextResponse.json(
+          { error: 'Forbidden' },
+          { status: 403 }
+        )
+      }
+    } else {
+      // If no secret is configured, block by default (safer than open signup).
+      return NextResponse.json(
+        { error: 'Admin signup is disabled' },
+        { status: 403 }
+      )
+    }
 
     if (!email || !password) {
       return NextResponse.json(

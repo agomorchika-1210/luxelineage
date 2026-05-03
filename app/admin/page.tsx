@@ -32,34 +32,43 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
       
-      // Load products for inventory count and low stock
-      const products = await productsApi.getAll()
-      const inventoryCount = products.length
-      const lowStockAlerts = products.filter(p => p.stockQuantity < 10).length
-
-      // Load sales for revenue
-      const salesResponse = await salesApi.getAll()
-      const totalSales = salesResponse.summary.totalRevenue || 0
+      // Batch all API calls in parallel for better performance
+      const [productsResult, salesResult, ordersResult] = await Promise.allSettled([
+        productsApi.getAll(),
+        salesApi.getAll(),
+        ordersApi.getAll(),
+      ])
       
-      // Load today's orders
-      const allOrders = await ordersApi.getAll()
+      // Extract results with fallbacks
+      const products = productsResult.status === 'fulfilled' ? productsResult.value : []
+      const salesResponse = salesResult.status === 'fulfilled' 
+        ? salesResult.value 
+        : { sales: [], summary: { totalRevenue: 0 } }
+      const allOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : []
+      const operationalOrders = allOrders.filter((order: any) => !order.isReturn)
+      
+      // Calculate stats
+      const inventoryCount = products.length
+      const lowStockAlerts = products.filter((p: any) => p.stockQuantity < 10).length
+      const totalSales = salesResponse.summary?.totalRevenue || 0
+      
       const today = new Date()
-      const ordersToday = allOrders.filter(order => {
+      const ordersToday = operationalOrders.filter((order: any) => {
         const orderDate = new Date(order.createdAt)
         return orderDate.toDateString() === today.toDateString()
       }).length
 
       // Get recent orders
-      const recent = allOrders.slice(0, 4).map(order => ({
+      const recent = operationalOrders.slice(0, 4).map((order: any) => ({
         id: order.id,
         customer: order.customerName || "N/A",
-        product: order.items[0]?.product?.name || "N/A",
+        product: order.items?.[0]?.product?.name || "N/A",
         amount: order.total,
         status: order.status,
       }))
 
       // Generate sales chart data (last 6 months)
-      const chartData = generateSalesChartData(salesResponse.sales)
+      const chartData = generateSalesChartData(salesResponse.sales || [])
 
       setStats({
         totalSales,

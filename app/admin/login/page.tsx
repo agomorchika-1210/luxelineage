@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,12 +14,22 @@ import { Loader2, Lock, AlertCircle } from "lucide-react"
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const { login, isAuthenticated, loading: authLoading } = useAuth()
+  const [submitting, setSubmitting] = useState(false)
+  const { login, isAuthenticated, loading: authLoading, error: authError, clearError } = useAuth()
   const router = useRouter()
 
+  // Clear error when inputs change
+  useEffect(() => {
+    if (authError) clearError()
+  }, [email, password]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Redirect if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push("/admin")
+    }
+  }, [isAuthenticated, authLoading, router])
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -29,22 +39,21 @@ export default function AdminLoginPage() {
   }
   
   if (isAuthenticated) {
-    router.push("/admin")
     return null
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
-    setLoading(true)
+    clearError()
+    setSubmitting(true)
 
     try {
       await login(email, password)
       router.push("/admin")
     } catch (err: any) {
-      setError(err.message || "Login failed. Please check your credentials.")
+      // Error is already set in context
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
@@ -64,10 +73,10 @@ export default function AdminLoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
+            {authError && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{authError}</AlertDescription>
               </Alert>
             )}
 
@@ -80,7 +89,7 @@ export default function AdminLoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={loading}
+                disabled={submitting}
                 autoFocus
               />
             </div>
@@ -94,12 +103,12 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={loading}
+                disabled={submitting}
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Signing in...

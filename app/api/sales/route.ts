@@ -44,21 +44,56 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }
     })
 
-    // Calculate totals
+    // Calculate totals and profits
     const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0)
+    
+    // Calculate total cost and profit for all sales
+    let totalCost = 0
+    let totalProfit = 0
+    
+    sales.forEach(sale => {
+      sale.order.items.forEach((item: any) => {
+        const itemCost = (item.cost || 0) * item.quantity
+        const itemRevenue = item.price * item.quantity
+        totalCost += itemCost
+        totalProfit += (itemRevenue - itemCost)
+      })
+    })
+
     const todaySales = sales.filter(sale => {
       const today = new Date()
       const saleDate = new Date(sale.createdAt)
       return saleDate.toDateString() === today.toDateString()
     })
     const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0)
+    
+    // Calculate today's profit
+    let todayCost = 0
+    let todayProfit = 0
+    todaySales.forEach(sale => {
+      sale.order.items.forEach((item: any) => {
+        const itemCost = (item.cost || 0) * item.quantity
+        const itemRevenue = item.price * item.quantity
+        todayCost += itemCost
+        todayProfit += (itemRevenue - itemCost)
+      })
+    })
+
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0
+    const todayProfitMargin = todayRevenue > 0 ? (todayProfit / todayRevenue) * 100 : 0
 
     return NextResponse.json({
       sales,
       summary: {
         totalRevenue,
+        totalCost,
+        totalProfit,
+        profitMargin: parseFloat(profitMargin.toFixed(2)),
         totalSales: sales.length,
         todayRevenue,
+        todayCost,
+        todayProfit,
+        todayProfitMargin: parseFloat(todayProfitMargin.toFixed(2)),
         todaySales: todaySales.length
       }
     })

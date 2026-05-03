@@ -86,11 +86,10 @@ export default function UsersPage() {
 
   const getAuthToken = async (): Promise<string | null> => {
     try {
-      const { auth } = await import('@/lib/firebase-client')
-      const { currentUser } = await import('firebase/auth')
-      const user = currentUser(auth)
-      if (user) {
-        return await user.getIdToken()
+      const { supabase } = await import('@/lib/supabase')
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        return session.access_token
       }
     } catch (error) {
       console.error('Failed to get auth token:', error)
@@ -157,7 +156,7 @@ export default function UsersPage() {
       if (!editingUser && !formData.firebaseUid) {
         toast({
           title: "Validation Error",
-          description: "Firebase UID is required for new users",
+          description: "Supabase UID is required for new users",
           variant: "destructive",
         })
         return
@@ -383,16 +382,16 @@ export default function UsersPage() {
             </div>
             {!editingUser && (
               <div className="space-y-2">
-                <Label htmlFor="firebaseUid">Firebase UID *</Label>
+                <Label htmlFor="firebaseUid">Supabase UID *</Label>
                 <Input
                   id="firebaseUid"
                   value={formData.firebaseUid}
                   onChange={(e) => setFormData({ ...formData, firebaseUid: e.target.value })}
-                  placeholder="Firebase Auth UID"
+                  placeholder="Supabase Auth UID"
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Get this from Firebase Auth after user signs up
+                  Get this from Supabase Auth after user signs up
                 </p>
               </div>
             )}

@@ -5,9 +5,11 @@ import { requireAuth, requireRole } from '@/lib/middleware'
 // GET /api/admin/users/[id] - Get user by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+    
     const auth = await requireAuth(request)
     if (!auth) {
       return NextResponse.json(
@@ -25,7 +27,7 @@ export async function GET(
     }
 
     const user = await prisma.admin.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         email: true,
@@ -55,9 +57,11 @@ export async function GET(
 // PUT /api/admin/users/[id] - Update user (admin only)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+    
     const auth = await requireAuth(request)
     if (!auth) {
       return NextResponse.json(
@@ -91,7 +95,7 @@ export async function PUT(
       const existingUser = await prisma.admin.findUnique({
         where: { email }
       })
-      if (existingUser && existingUser.id !== params.id) {
+      if (existingUser && existingUser.id !== id) {
         return NextResponse.json(
           { error: 'Email already in use' },
           { status: 400 }
@@ -104,7 +108,7 @@ export async function PUT(
     if (role) updateData.role = role
 
     const user = await prisma.admin.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       select: {
         id: true,
@@ -140,9 +144,11 @@ export async function PUT(
 // DELETE /api/admin/users/[id] - Delete user (admin only)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+    
     const auth = await requireAuth(request)
     if (!auth) {
       return NextResponse.json(
@@ -161,7 +167,7 @@ export async function DELETE(
     }
 
     // Prevent deleting yourself
-    if (auth.adminId === params.id) {
+    if (auth.adminId === id) {
       return NextResponse.json(
         { error: 'Cannot delete your own account' },
         { status: 400 }
@@ -169,7 +175,7 @@ export async function DELETE(
     }
 
     await prisma.admin.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     return NextResponse.json({ success: true })

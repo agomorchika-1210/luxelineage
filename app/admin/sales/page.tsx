@@ -4,8 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { 
   ShoppingCart, 
   Search, 
@@ -16,7 +25,12 @@ import {
   Package, 
   Eye,
   X,
-  Loader2
+  Loader2,
+  Truck,
+  CheckCircle,
+  XCircle,
+  FileText,
+  Filter
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { productsApi, ordersApi, salesApi } from "@/lib/api-client"
@@ -69,10 +83,17 @@ interface CartItem {
   color?: string
 }
 
+function parseMoneyInput(raw: string): number | null {
+  const n = parseFloat(raw.replace(/,/g, "").trim())
+  return Number.isFinite(n) ? n : null
+}
+
 export default function SalesPage() {
   const [activeTab, setActiveTab] = useState("selling")
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedSize, setSelectedSize] = useState<string>("")
   const [selectedColor, setSelectedColor] = useState<string>("")
@@ -81,20 +102,37 @@ export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState({ products: true, orders: false, sales: false })
   const [processing, setProcessing] = useState<string | null>(null)
+  const [posCheckoutOpen, setPosCheckoutOpen] = useState(false)
+  const [posAmountPaid, setPosAmountPaid] = useState("")
+  
+  // Order filtering
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>("ALL")
+  const [orderSourceFilter, setOrderSourceFilter] = useState<string>("ALL")
+  const [orderSearch, setOrderSearch] = useState<string>("")
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
+  
   const { toast } = useToast()
 
   useEffect(() => {
     loadProducts()
+  }, [])
+
+  useEffect(() => {
     if (activeTab === "orders") {
       loadOrders()
-    } else if (activeTab === "processed") {
+    }
+  }, [activeTab, orderStatusFilter, orderSourceFilter, startDate, endDate, orderSearch])
+
+  useEffect(() => {
+    if (activeTab === "processed") {
       loadSales()
     }
   }, [activeTab])
 
   const loadProducts = async () => {
     try {
-      setLoading({ ...loading, products: true })
+      setLoading((prev) => ({ ...prev, products: true }))
       const data = await productsApi.getAll()
       setProducts(data)
     } catch (error: any) {
@@ -104,14 +142,20 @@ export default function SalesPage() {
         variant: "destructive",
       })
     } finally {
-      setLoading({ ...loading, products: false })
+      setLoading((prev) => ({ ...prev, products: false }))
     }
   }
 
   const loadOrders = async () => {
     try {
-      setLoading({ ...loading, orders: true })
-      const data = await ordersApi.getAll("PENDING")
+      setLoading((prev) => ({ ...prev, orders: true }))
+      const data = await ordersApi.getAll(
+        orderStatusFilter === "ALL" ? undefined : orderStatusFilter,
+        orderSourceFilter === "ALL" ? undefined : orderSourceFilter,
+        startDate || undefined,
+        endDate || undefined,
+        orderSearch || undefined
+      )
       setOrders(data)
     } catch (error: any) {
       toast({
@@ -120,13 +164,13 @@ export default function SalesPage() {
         variant: "destructive",
       })
     } finally {
-      setLoading({ ...loading, orders: false })
+      setLoading((prev) => ({ ...prev, orders: false }))
     }
   }
 
   const loadSales = async () => {
     try {
-      setLoading({ ...loading, sales: true })
+      setLoading((prev) => ({ ...prev, sales: true }))
       const data = await salesApi.getAll()
       setSales(data.sales)
     } catch (error: any) {
@@ -136,9 +180,66 @@ export default function SalesPage() {
         variant: "destructive",
       })
     } finally {
-      setLoading({ ...loading, sales: false })
+      setLoading((prev) => ({ ...prev, sales: false }))
     }
   }
+
+  const selectProduct = (product: Product) => {
+    setSelectedProduct(product)
+    setSelectedSize("")
+    setSelectedColor("")
+    setSearchQuery("")
+    setShowSuggestions(false)
+    setHighlightedSuggestion(0)
+  }
+
+  const getTotalQuantityInCartForProduct = (productId: string) =>
+    cart
+      .filter((item) => item.productId === productId)
+      .reduce((sum, item) => sum + item.quantity, 0)
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredProducts = products.filter((product) => {
+    if (!normalizedQuery) return true
+    return (
+      product.name.toLowerCase().includes(normalizedQuery) ||
+      product.brand?.toLowerCase().includes(normalizedQuery) ||
+      product.sku.toLowerCase().includes(normalizedQuery)
+    )
+  })
+
+  const suggestedProducts =
+    normalizedQuery.length > 0
+      ? products
+          .filter((product) => {
+            const name = product.name.toLowerCase()
+            const brand = (product.brand || "").toLowerCase()
+            const sku = product.sku.toLowerCase()
+            return (
+              sku.includes(normalizedQuery) ||
+              name.includes(normalizedQuery) ||
+              brand.includes(normalizedQuery)
+            )
+          })
+          .sort((a, b) => {
+            const aSkuStarts = a.sku.toLowerCase().startsWith(normalizedQuery) ? 1 : 0
+            const bSkuStarts = b.sku.toLowerCase().startsWith(normalizedQuery) ? 1 : 0
+            if (aSkuStarts !== bSkuStarts) return bSkuStarts - aSkuStarts
+            return a.name.localeCompare(b.name)
+          })
+          .slice(0, 8)
+      : []
+
+  useEffect(() => {
+    setHighlightedSuggestion(0)
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (!showSuggestions) return
+    if (highlightedSuggestion >= suggestedProducts.length) {
+      setHighlightedSuggestion(0)
+    }
+  }, [showSuggestions, highlightedSuggestion, suggestedProducts.length])
 
   const handleProcessOrder = async (orderId: string) => {
     try {
@@ -161,18 +262,175 @@ export default function SalesPage() {
     }
   }
 
-  const filteredProducts = products.filter(
-    (product) =>
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const handleShipOrder = async (orderId: string) => {
+    try {
+      setProcessing(orderId)
+      await ordersApi.ship(orderId)
+      toast({
+        title: "Success",
+        description: "Order marked as shipped",
+      })
+      loadOrders()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to ship order",
+        variant: "destructive",
+      })
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  const handleDeliverOrder = async (orderId: string) => {
+    try {
+      setProcessing(orderId)
+      await ordersApi.deliver(orderId)
+      toast({
+        title: "Success",
+        description: "Order marked as delivered",
+      })
+      loadOrders()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to deliver order",
+        variant: "destructive",
+      })
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (!confirm("Are you sure you want to cancel this order? Stock will be restored.")) {
+      return
+    }
+    try {
+      setProcessing(orderId)
+      await ordersApi.cancel(orderId)
+      toast({
+        title: "Success",
+        description: "Order cancelled successfully",
+      })
+      loadOrders()
+      loadSales()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cancel order",
+        variant: "destructive",
+      })
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  const handlePrintReceipt = async (orderId: string) => {
+    try {
+      const receipt = await ordersApi.getReceipt(orderId)
+      const receiptWindow = window.open("", "_blank")
+      if (!receiptWindow) {
+        toast({
+          title: "Allow pop-ups",
+          description: "Receipt was saved — enable pop-ups for this site to print, or use Receipt from Processed Sales.",
+          variant: "destructive",
+        })
+        return
+      }
+      receiptWindow.document.write(`
+          <html>
+            <head>
+              <title>Receipt - ${receipt.orderNumber}</title>
+              <style>
+                body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+                h1 { border-bottom: 2px solid #000; padding-bottom: 10px; }
+                .info { margin: 10px 0; }
+                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+                .total { font-size: 18px; font-weight: bold; margin-top: 20px; }
+                @media print { button { display: none; } }
+              </style>
+            </head>
+            <body>
+              <h1>Receipt ${receipt.orderNumber}</h1>
+              <div class="info"><strong>Date:</strong> ${new Date(receipt.date).toLocaleString()}</div>
+              <div class="info"><strong>Status:</strong> ${receipt.status}</div>
+              <div class="info"><strong>Customer:</strong> ${receipt.customer.name}</div>
+              ${receipt.customer.email ? `<div class="info"><strong>Email:</strong> ${receipt.customer.email}</div>` : ''}
+              ${receipt.customer.phone ? `<div class="info"><strong>Phone:</strong> ${receipt.customer.phone}</div>` : ''}
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${receipt.items.map((item: any) => `
+                    <tr>
+                      <td>${item.name} (${item.sku})</td>
+                      <td>${item.quantity}</td>
+                      <td>$${item.unitPrice.toFixed(2)}</td>
+                      <td>$${item.total.toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              <div class="total">Total: $${receipt.total.toFixed(2)}</div>
+              ${
+                receipt.amountTendered != null
+                  ? `<div class="info"><strong>Amount tendered:</strong> $${Number(receipt.amountTendered).toFixed(2)}</div>`
+                  : ""
+              }
+              ${
+                receipt.changeGiven != null
+                  ? `<div class="info"><strong>Change:</strong> $${Number(receipt.changeGiven).toFixed(2)}</div>`
+                  : ""
+              }
+              <div class="info"><strong>Payment Method:</strong> ${receipt.paymentMethod}</div>
+              <button onclick="window.print()">Print Receipt</button>
+            </body>
+          </html>
+        `)
+      receiptWindow.document.close()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate receipt",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case "PENDING": return "secondary"
+      case "PROCESSED": return "default"
+      case "SHIPPED": return "outline"
+      case "DELIVERED": return "default"
+      case "CANCELLED": return "destructive"
+      default: return "secondary"
+    }
+  }
 
   const addToCart = () => {
     if (!selectedProduct) return
     
     const size = selectedSize || (selectedProduct.sizes && selectedProduct.sizes.length > 0 ? selectedProduct.sizes[0] : undefined)
     const color = selectedColor || (selectedProduct.colors && selectedProduct.colors.length > 0 ? selectedProduct.colors[0] : undefined)
+    const totalQuantityInCart = getTotalQuantityInCartForProduct(selectedProduct.id)
+
+    if (totalQuantityInCart >= selectedProduct.stockQuantity) {
+      toast({
+        title: "Insufficient stock",
+        description: `Only ${selectedProduct.stockQuantity} units available for ${selectedProduct.name}.`,
+        variant: "destructive",
+      })
+      return
+    }
     
     const existingItem = cart.find(
       (item) => item.productId === selectedProduct.id && item.size === size && item.color === color
@@ -204,9 +462,24 @@ export default function SalesPage() {
     setSelectedSize("")
     setSelectedColor("")
     setSearchQuery("")
+    setShowSuggestions(false)
   }
 
   const updateQuantity = (productId: string, size: string | undefined, color: string | undefined, delta: number) => {
+    if (delta > 0) {
+      const product = products.find((p) => p.id === productId)
+      const totalQuantityInCart = getTotalQuantityInCartForProduct(productId)
+
+      if (product && totalQuantityInCart >= product.stockQuantity) {
+        toast({
+          title: "Insufficient stock",
+          description: `Cannot add more than ${product.stockQuantity} units of ${product.name}.`,
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
     setCart(
       cart.map((item) => {
         if (item.productId === productId && item.size === size && item.color === color) {
@@ -222,31 +495,103 @@ export default function SalesPage() {
     setCart(cart.filter((item) => !(item.productId === productId && item.size === size && item.color === color)))
   }
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  /** Rounded to cents — avoids float mismatch with server totals on POS POST. */
+  const cartTotal =
+    Math.round(cart.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100) / 100
+  const amountPaidNum = parseMoneyInput(posAmountPaid)
+  const posTenderSufficient =
+    amountPaidNum !== null && amountPaidNum + 0.005 >= cartTotal
+  const posChangeDue =
+    posTenderSufficient && amountPaidNum !== null
+      ? Math.round((amountPaidNum - cartTotal) * 100) / 100
+      : 0
+  const posAmountShort =
+    amountPaidNum !== null && amountPaidNum + 0.005 < cartTotal
+      ? Math.round((cartTotal - amountPaidNum) * 100) / 100
+      : null
 
-  const processSale = async () => {
+  const openPosCheckout = () => {
     if (cart.length === 0) return
-    
+
+    const stockValidationErrors: string[] = []
+    cart.forEach((item) => {
+      const product = products.find((p) => p.id === item.productId)
+      if (!product) {
+        stockValidationErrors.push(`${item.name}: Product not found`)
+        return
+      }
+      if (item.quantity > product.stockQuantity) {
+        stockValidationErrors.push(
+          `${item.name}: Requested ${item.quantity}, available ${product.stockQuantity}`
+        )
+      }
+    })
+
+    if (stockValidationErrors.length > 0) {
+      toast({
+        title: "Stock validation failed",
+        description: stockValidationErrors.join(" | "),
+        variant: "destructive",
+      })
+      return
+    }
+
+    setPosAmountPaid(cartTotal.toFixed(2))
+    setPosCheckoutOpen(true)
+  }
+
+  const completePosCheckout = async () => {
+    if (cart.length === 0) return
+    const paid = parseMoneyInput(posAmountPaid)
+    if (paid === null) {
+      toast({
+        title: "Invalid amount",
+        description: "Enter the amount the customer paid.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (paid + 0.005 < cartTotal) {
+      toast({
+        title: "Insufficient payment",
+        description: `Amount must be at least $${cartTotal.toFixed(2)}.`,
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setProcessing("pos")
-      await salesApi.createPOS({
-        items: cart.map(item => ({
+      const roundedPaid = Math.round(paid * 100) / 100
+      const result = await salesApi.createPOS({
+        items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
         })),
         total: cartTotal,
+        amountTendered: roundedPaid,
       })
-      toast({
-        title: "Success",
-        description: "Sale processed successfully",
-      })
+      const orderId = (result as { order?: { id: string } })?.order?.id
+
       setCart([])
+      setPosCheckoutOpen(false)
       loadProducts()
       loadSales()
+
+      toast({
+        title: "Sale completed",
+        description: orderId
+          ? `Order ${orderId.slice(0, 8)}… recorded. Opening receipt…`
+          : "Sale recorded.",
+      })
+
+      if (orderId) {
+        await handlePrintReceipt(orderId)
+      }
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to process sale",
+        title: "Sale failed",
+        description: error.message || "Failed to process sale. Check you are logged in and the database is migrated.",
         variant: "destructive",
       })
     } finally {
@@ -313,33 +658,89 @@ export default function SalesPage() {
                         placeholder="Scan barcode or enter SKU..."
                         value={searchQuery}
                         onChange={(e) => {
-                          setSearchQuery(e.target.value)
-                          // Auto-select product if SKU matches
-                          const product = products.find(p => p.sku.toLowerCase() === e.target.value.toLowerCase())
-                          if (product) {
-                            setSelectedProduct(product)
-                            setSearchQuery("")
+                          const value = e.target.value.replace(/[\r\n]+/g, "")
+                          setSearchQuery(value)
+                          setShowSuggestions(Boolean(value.trim()))
+
+                          // Scanner-friendly: auto-pick exact SKU/barcode matches.
+                          const exactSkuMatch = products.find(
+                            (p) => p.sku.toLowerCase() === value.trim().toLowerCase()
+                          )
+                          if (exactSkuMatch) {
+                            selectProduct(exactSkuMatch)
                           }
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && searchQuery) {
-                            const product = products.find(
-                              p => p.sku.toLowerCase() === searchQuery.toLowerCase() ||
-                                   p.name.toLowerCase().includes(searchQuery.toLowerCase())
+                          if (e.key === "ArrowDown" && suggestedProducts.length > 0) {
+                            e.preventDefault()
+                            setShowSuggestions(true)
+                            setHighlightedSuggestion((prev) =>
+                              prev + 1 >= suggestedProducts.length ? 0 : prev + 1
                             )
+                            return
+                          }
+
+                          if (e.key === "ArrowUp" && suggestedProducts.length > 0) {
+                            e.preventDefault()
+                            setHighlightedSuggestion((prev) =>
+                              prev - 1 < 0 ? suggestedProducts.length - 1 : prev - 1
+                            )
+                            return
+                          }
+
+                          if (e.key === "Escape") {
+                            setShowSuggestions(false)
+                            return
+                          }
+
+                          if (e.key === "Enter" && normalizedQuery) {
+                            e.preventDefault()
+                            const suggested = suggestedProducts[highlightedSuggestion]
+                            const exactSkuMatch = products.find(
+                              (p) => p.sku.toLowerCase() === normalizedQuery
+                            )
+                            const product = exactSkuMatch || suggested
                             if (product) {
-                              setSelectedProduct(product)
-                              setSearchQuery("")
+                              selectProduct(product)
                             }
                           }
+                        }}
+                        onFocus={() => {
+                          setShowSuggestions(Boolean(searchQuery.trim()) && suggestedProducts.length > 0)
+                        }}
+                        onBlur={() => {
+                          // Allow click events on suggestion buttons before closing.
+                          setTimeout(() => setShowSuggestions(false), 150)
                         }}
                         disabled={loading.products}
                         className="pl-10"
                         autoFocus
                       />
                     </div>
+                    {showSuggestions && suggestedProducts.length > 0 && (
+                      <div className="mt-2 border border-border rounded-md bg-background shadow-sm overflow-hidden">
+                        {suggestedProducts.map((product, index) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                              index === highlightedSuggestion
+                                ? "bg-muted"
+                                : "hover:bg-muted/60"
+                            }`}
+                            onMouseEnter={() => setHighlightedSuggestion(index)}
+                            onClick={() => selectProduct(product)}
+                          >
+                            <div className="font-medium">{product.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              SKU: {product.sku} | {product.brand || "N/A"} | Stock: {product.stockQuantity}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1">
-                      Barcode scanning will be implemented in a future update
+                      Type SKU, barcode value, or product name. Press Enter to quick-select top match.
                     </p>
                   </div>
 
@@ -350,7 +751,7 @@ export default function SalesPage() {
                         value={selectedProduct?.id}
                         onValueChange={(value) => {
                           const product = products.find(p => p.id === value)
-                          if (product) setSelectedProduct(product)
+                          if (product) selectProduct(product)
                         }}
                         disabled={loading.products}
                       >
@@ -414,9 +815,15 @@ export default function SalesPage() {
                             </Select>
                           </div>
                         )}
-                        <Button className="w-full" onClick={addToCart}>
+                        <Button
+                          className="w-full"
+                          onClick={addToCart}
+                          disabled={selectedProduct.stockQuantity <= getTotalQuantityInCartForProduct(selectedProduct.id)}
+                        >
                           <Plus className="h-4 w-4 mr-2" />
-                          Add to Cart
+                          {selectedProduct.stockQuantity <= getTotalQuantityInCartForProduct(selectedProduct.id)
+                            ? "Out of Stock in Cart"
+                            : "Add to Cart"}
                         </Button>
                       </CardContent>
                     </Card>
@@ -489,15 +896,12 @@ export default function SalesPage() {
                           <span>Total</span>
                           <span>${cartTotal.toFixed(2)}</span>
                         </div>
-                        <Button className="w-full" onClick={processSale} disabled={cart.length === 0 || processing === "pos"}>
-                          {processing === "pos" ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Processing...
-                            </>
-                          ) : (
-                            "Process Sale"
-                          )}
+                        <Button
+                          className="w-full"
+                          onClick={openPosCheckout}
+                          disabled={cart.length === 0 || processing === "pos"}
+                        >
+                          Process Sale
                         </Button>
                       </div>
                     </>
@@ -513,15 +917,64 @@ export default function SalesPage() {
         <TabsContent value="orders" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-medium tracking-wide">ONLINE ORDERS</CardTitle>
+              <CardTitle className="text-base font-medium tracking-wide">ORDERS</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                <Input
+                  placeholder="Search customer..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  className="col-span-1 md:col-span-2"
+                />
+                <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Statuses</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="PROCESSED">Processed</SelectItem>
+                    <SelectItem value="SHIPPED">Shipped</SelectItem>
+                    <SelectItem value="DELIVERED">Delivered</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={orderSourceFilter} onValueChange={setOrderSourceFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Sources</SelectItem>
+                    <SelectItem value="ONLINE">Online</SelectItem>
+                    <SelectItem value="POS">POS</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    placeholder="Start Date"
+                    className="flex-1"
+                  />
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    placeholder="End Date"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
               {loading.orders ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : orders.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No pending orders</p>
+                <p className="text-sm text-muted-foreground text-center py-8">No orders found</p>
               ) : (
                 <div className="space-y-4">
                   {orders.map((order) => (
@@ -531,10 +984,11 @@ export default function SalesPage() {
                           <div>
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-mono">{order.id}</span>
-                              <Badge
-                                variant={order.status === "PENDING" ? "secondary" : "default"}
-                              >
+                              <Badge variant={getStatusBadgeVariant(order.status)}>
                                 {order.status}
+                              </Badge>
+                              <Badge variant={order.source === "POS" ? "default" : "outline"}>
+                                {order.source}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">
@@ -542,6 +996,14 @@ export default function SalesPage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePrintReceipt(order.id)}
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Receipt
+                            </Button>
                             {order.status === "PENDING" && (
                               <Button 
                                 size="sm" 
@@ -557,6 +1019,57 @@ export default function SalesPage() {
                                   <>
                                     <CheckCircle2 className="h-4 w-4 mr-2" />
                                     Process
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {order.status === "PROCESSED" && order.source === "ONLINE" && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleShipOrder(order.id)}
+                                disabled={processing === order.id}
+                              >
+                                {processing === order.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Truck className="h-4 w-4 mr-2" />
+                                    Ship
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {order.status === "SHIPPED" && order.source === "ONLINE" && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleDeliverOrder(order.id)}
+                                disabled={processing === order.id}
+                              >
+                                {processing === order.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                    Deliver
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {order.status !== "CANCELLED" && order.status !== "DELIVERED" && (
+                              <Button 
+                                size="sm" 
+                                variant="destructive"
+                                onClick={() => handleCancelOrder(order.id)}
+                                disabled={processing === order.id}
+                              >
+                                {processing === order.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <XCircle className="h-4 w-4 mr-2" />
+                                    Cancel
                                   </>
                                 )}
                               </Button>
@@ -636,6 +1149,9 @@ export default function SalesPage() {
                         <th className="text-left py-3 px-4 text-xs font-medium tracking-wide text-muted-foreground">
                           TOTAL
                         </th>
+                        <th className="text-right py-3 px-4 text-xs font-medium tracking-wide text-muted-foreground">
+                          ACTIONS
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -661,6 +1177,16 @@ export default function SalesPage() {
                             ))}
                           </td>
                           <td className="py-3 px-4 text-sm font-light">${sale.total.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePrintReceipt(sale.orderId)}
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Receipt
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -671,6 +1197,143 @@ export default function SalesPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={posCheckoutOpen}
+        onOpenChange={(open) => {
+          setPosCheckoutOpen(open)
+          if (!open) setPosAmountPaid("")
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" showCloseButton={processing !== "pos"}>
+          <DialogHeader>
+            <DialogTitle className="font-light tracking-wide">Complete in-store sale</DialogTitle>
+            <DialogDescription>
+              Confirm line items, enter cash received (or card total), then complete. Change is calculated automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
+            <div className="rounded-md border divide-y">
+              {cart.map((item, idx) => (
+                <div key={idx} className="flex justify-between gap-4 px-3 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="font-medium">{item.name}</span>
+                    {(item.size || item.color) && (
+                      <span className="text-muted-foreground text-xs block">
+                        {[item.size, item.color].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {item.quantity} × ${item.price.toFixed(2)}
+                  </span>
+                  <span className="shrink-0 font-light">
+                    ${(item.price * item.quantity).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>${cartTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-base font-medium border-t pt-2">
+                <span>Total due</span>
+                <span>${cartTotal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pos-amount-paid">Amount received</Label>
+              <Input
+                id="pos-amount-paid"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="0.00"
+                value={posAmountPaid}
+                onChange={(e) => setPosAmountPaid(e.target.value)}
+                className="text-lg tabular-nums"
+                disabled={processing === "pos"}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPosAmountPaid(cartTotal.toFixed(2))}
+                  disabled={processing === "pos"}
+                >
+                  Exact (total)
+                </Button>
+              </div>
+            </div>
+
+            {amountPaidNum !== null && (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm space-y-1">
+                {posTenderSufficient ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Change due</span>
+                      <span className="font-medium tabular-nums">
+                        ${posChangeDue.toFixed(2)}
+                      </span>
+                    </div>
+                    {posChangeDue <= 0 && (
+                      <p className="text-xs text-muted-foreground">Exact payment — no change.</p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-destructive">
+                      <span>Still owed</span>
+                      <span className="font-medium tabular-nums">
+                        ${posAmountShort?.toFixed(2) ?? "—"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Customer must pay at least the total before you can complete the sale.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPosCheckoutOpen(false)}
+              disabled={processing === "pos"}
+            >
+              Back
+            </Button>
+            <Button
+              type="button"
+              onClick={completePosCheckout}
+              disabled={
+                cart.length === 0 ||
+                processing === "pos" ||
+                !posTenderSufficient ||
+                amountPaidNum === null
+              }
+            >
+              {processing === "pos" ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Completing…
+                </>
+              ) : (
+                "Complete sale"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
 import { prisma } from '@/lib/prisma'
+import { verifyToken } from '@/lib/verify-token'
 
 // POST /api/auth/login
-// Note: This endpoint creates/verifies admin in database after Supabase Auth
-// The actual login happens on the client side with Supabase Auth
-// This endpoint is called after successful Supabase login to sync admin data
+// Called client-side after a successful Supabase sign-in to sync the
+// Supabase user with the Prisma Admin record.
 export async function POST(request: NextRequest) {
   try {
     const { accessToken } = await request.json()
@@ -17,85 +16,109 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify Supabase token
-    let supabaseUser
-    try {
-      const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken)
-      
-      if (error || !user) {
-        return NextResponse.json(
-          { error: `Token verification failed: ${error?.message || 'Invalid token'}` },
-          { status: 401 }
-        )
-      }
-      
-      supabaseUser = user
-    } catch (verifyError: any) {
-      console.error('Token verification error:', verifyError)
-      return NextResponse.json(
-        { error: `Token verification failed: ${verifyError.message || 'Unknown error'}` },
-        { status: 401 }
-      )
-    }
+    // Verify token via 3-tier cascade (service key → public key → JWT decode)
+    const verified = await verifyToken(accessToken)
 
-    const supabaseUid = supabaseUser.id
-    const email = supabaseUser.email
-
-    if (!email) {
-      return NextResponse.json(
-        { error: 'Email not found in user data' },
-        { status: 400 }
-      )
-    }
-
-    // Check if admin exists in database, create if not
-    let admin = await prisma.admin.findUnique({
-      where: { firebaseUid: supabaseUid } // Note: field name is still firebaseUid in schema, but now stores Supabase UID
-    })
-
-    if (!admin) {
-      // Create admin in database linked to Supabase UID
-      admin = await prisma.admin.create({
-        data: {
-          firebaseUid: supabaseUid, // Using existing field name, but storing Supabase UID
-          email
-        }
-      })
-    }
-
-    return NextResponse.json({
-      admin: {
-        id: admin.id,
-        email: admin.email,
-        supabaseUid: admin.firebaseUid // Return as supabaseUid for clarity
-      },
-      // Return the same token for client to use
-      token: accessToken
-    })
-  } catch (error: any) {
-    console.error('Login error:', error)
-    console.error('Error details:', {
-      code: error.code,
-      message: error.message,
-      stack: error.stack
-    })
-    
-    if (error.message?.includes('Invalid') || error.message?.includes('expired')) {
+    if (!verified) {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
         { status: 401 }
       )
     }
 
-    if (error.message?.includes('prisma') || error.message?.includes('database')) {
+    const { id: supabaseUid, email } = verified
+
+    let admin = await prisma.admin.findUnique({
+      where: { firebaseUid: supabaseUid }
+    })
+
+    // Safe relink path: if admin exists by email but UID differs (common after
+    // auth migrations or key changes), bind that admin row to the current UID.
+    if (!admin) {
+      const adminByEmail = await prisma.admin.findUnique({
+        where: { email }
+      })
+
+      if (adminByEmail) {
+        console.log('[login] Relinking admin by email:', email, '→ UID:', supabaseUid)
+        admin = await prisma.admin.update({
+          where: { id: adminByEmail.id },
+          data: { firebaseUid: supabaseUid }
+        })
+      }
+    }
+
+    // Zero-admin bootstrap: when the Admin table is completely empty, the first
+    // verified Supabase user is automatically promoted to ADMIN. This path is
+    // permanently blocked once any admin record exists.
+    if (!admin) {
+      const adminCount = await prisma.admin.count()
+      if (adminCount === 0) {
+        console.log('[login] Zero-admin bootstrap: creating first admin for', email)
+        admin = await prisma.admin.create({
+          data: {
+            email,
+            firebaseUid: supabaseUid,
+            role: 'ADMIN',
+          }
+        })
+      }
+    }
+
+    if (!admin) {
+      console.warn('[login] No admin record for uid:', supabaseUid, 'email:', email)
       return NextResponse.json(
-        { error: 'Database error. Please check your connection.' },
+        { error: 'Forbidden: not an admin user' },
+        { status: 403 }
+      )
+    }
+
+    return NextResponse.json({
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        role: admin.role,
+        supabaseUid: admin.firebaseUid,
+      },
+      token: accessToken,
+    })
+  } catch (error: any) {
+    // Log the full error so it's visible in the Next.js dev server terminal
+    console.error('[login] Unexpected error:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack,
+    })
+
+    // Prisma-specific error codes
+    if (error.code === 'P1001') {
+      return NextResponse.json(
+        { error: 'Database unreachable. Check DATABASE_URL and network.' },
+        { status: 500 }
+      )
+    }
+    if (error.code === 'P2021') {
+      return NextResponse.json(
+        { error: 'Database table missing. Run: npx prisma db push' },
+        { status: 500 }
+      )
+    }
+    if (error.code === 'P1003') {
+      return NextResponse.json(
+        { error: 'Database does not exist. Run: npx prisma db push' },
         { status: 500 }
       )
     }
 
+    const isDev = process.env.NODE_ENV === 'development'
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      {
+        error: isDev
+          ? `Server error: ${error.message} (code: ${error.code ?? 'n/a'})`
+          : 'Internal server error',
+      },
       { status: 500 }
     )
   }

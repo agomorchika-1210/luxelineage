@@ -6,6 +6,7 @@ import "./globals.css"
 import { CartProvider } from "@/lib/cart-context"
 import { AuthProvider } from "@/lib/auth-context"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 
 const _cormorant = Cormorant_Garamond({
   subsets: ["latin"],
@@ -25,6 +26,11 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
+        url: "/icon-dark-32x32.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+      {
         url: "/icon-light-32x32.png",
         media: "(prefers-color-scheme: light)",
       },
@@ -37,6 +43,7 @@ export const metadata: Metadata = {
         type: "image/svg+xml",
       },
     ],
+    shortcut: "/icon-dark-32x32.png",
     apple: "/apple-icon.png",
   },
 }
@@ -57,6 +64,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <CartProvider>{children}</CartProvider>
+            <Toaster />
           </AuthProvider>
         </ThemeProvider>
         <Analytics />

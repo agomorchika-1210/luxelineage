@@ -1,79 +1,129 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// PHASE 1: Auth Module
-// Admin linked to Supabase Auth via firebaseUid (field name kept for backward compatibility)
 model Admin {
-  id         String   @id @default(cuid())
-  firebaseUid String  @unique // Supabase Auth UID (field name kept for backward compatibility)
-  email      String   @unique
-  role       AdminRole @default(SALES_PERSON)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String    @id @default(cuid())
+  firebaseUid String    @unique
+  email       String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  role        AdminRole @default(SALES_PERSON)
+}
+
+model Product {
+  id                String      @id @default(cuid())
+  name              String
+  sku               String      @unique
+  brand             String
+  price             Float
+  stockQuantity     Int         @default(0)
+  category          String
+  description       String?
+  image             String?
+  images            String?
+  sizes             String?
+  colors            String?
+  features          String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  cost              Float       @default(0)
+  lowStockThreshold Int         @default(10)
+  orderItems        OrderItem[]
+}
+
+model Order {
+  id                 String      @id @default(cuid())
+  idempotencyKey     String?     @unique
+  source             OrderSource @default(ONLINE)
+  status             OrderStatus @default(PENDING)
+  total              Float
+  customerName       String?
+  customerEmail      String?
+  customerPhone      String?
+  shippingAddress    String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  cancellationReason String?
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  customerId         String?
+  refundAmount       Float?
+  refundedAt         DateTime?
+  
+  // Discount and return tracking
+  discountAmount     Float       @default(0)
+  isReturn           Boolean     @default(false)
+  returnReason       String?
+  
+  // POS checkout: cash/card amount received and change (set for source=POS)
+  amountTendered     Float?
+  changeGiven        Float?
+  
+  customer           Customer?   @relation(fields: [customerId], references: [id])
+  items              OrderItem[]
+  sale               Sale?
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  cost      Float   @default(0)
+  discount  Float   @default(0)
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Sale {
+  id        String      @id @default(cuid())
+  orderId   String      @unique
+  source    OrderSource
+  total     Float
+  createdAt DateTime    @default(now())
+  order     Order       @relation(fields: [orderId], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  message   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  phone     String?
+  firstName String?
+  lastName  String?
+  fullName  String
+  address   String?
+  city      String?
+  state     String?
+  zip       String?
+  country   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+
+  @@index([email])
+  @@index([phone])
 }
 
 enum AdminRole {
   ADMIN
   MANAGER
   SALES_PERSON
-}
-
-// PHASE 2: Products Module
-model Product {
-  id            String   @id @default(cuid())
-  name          String
-  sku           String   @unique
-  brand         String
-  price         Float
-  stockQuantity Int      @default(0)
-  category      String
-  description   String?
-  image         String?
-  images        String?  // JSON array of image URLs
-  sizes         String?  // JSON array of sizes
-  colors        String?  // JSON array of colors
-  features      String?  // JSON array of features
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  orderItems    OrderItem[]
-}
-
-// PHASE 3: Orders Module
-model Order {
-  id        String      @id @default(cuid())
-  source    OrderSource @default(ONLINE)
-  status    OrderStatus @default(PENDING)
-  total     Float
-  items     OrderItem[]
-  sale      Sale?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  
-  // Customer info for online orders
-  customerName  String?
-  customerEmail String?
-  customerPhone String?
-  shippingAddress String?
-}
-
-model OrderItem {
-  id        String  @id @default(cuid())
-  orderId   String
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  quantity  Int
-  price     Float   // Price at time of order
 }
 
 enum OrderSource {
@@ -84,29 +134,87 @@ enum OrderSource {
 enum OrderStatus {
   PENDING
   PROCESSED
-}
-
-// PHASE 5: Sales Module
-model Sale {
-  id        String      @id @default(cuid())
-  orderId   String      @unique
-  order     Order       @relation(fields: [orderId], references: [id])
-  source    OrderSource
-  total     Float
-  createdAt DateTime    @default(now())
-}
-
-// PHASE 8: Notifications Module (stub)
-model Notification {
-  id        String           @id @default(cuid())
-  type      NotificationType
-  message   String
-  read      Boolean          @default(false)
-  createdAt DateTime         @default(now())
+  SHIPPED
+  DELIVERED
+  CANCELLED
 }
 
 enum NotificationType {
   ORDER_PLACED
   ORDER_PROCESSED
+  ORDER_SHIPPED
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+  LOW_STOCK
 }
 
+// P&L System Models
+
+enum ExpenseCategory {
+  RENT
+  ELECTRICITY
+  TRANSPORT
+  SOUVENIR
+  MARKETING
+  SALARIES
+  UTILITIES
+  MAINTENANCE
+  OTHER
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  category    ExpenseCategory
+  description String
+  amount      Float
+  date        DateTime        @default(now())
+  createdBy   String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([category])
+  @@index([date])
+}
+
+enum AssetType {
+  INVENTORY
+  BANK_ACCOUNT
+  LEASE_PROPERTY
+  LEASE_ASSETS
+  OTHER_FIXED
+  OTHER_CURRENT
+}
+
+model Asset {
+  id          String    @id @default(cuid())
+  type        AssetType
+  name        String
+  description String?
+  value       Float
+  date        DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([type])
+}
+
+enum LiabilityType {
+  ACCOUNTS_PAYABLE
+  LOANS
+  LEASE_LIABILITIES
+  TAXES_PAYABLE
+  OTHER
+}
+
+model Liability {
+  id          String        @id @default(cuid())
+  type        LiabilityType
+  name        String
+  description String?
+  amount      Float
+  date        DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([type])
+}

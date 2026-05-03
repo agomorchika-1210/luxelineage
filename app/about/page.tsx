@@ -3,6 +3,7 @@ import { StoreFooter } from "@/components/store-footer"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowRight } from "lucide-react"
 
 export default function AboutPage() {
@@ -13,13 +14,15 @@ export default function AboutPage() {
       <main className="flex-1">
         {/* Hero Section */}
         <section className="relative h-[60vh] min-h-[500px] bg-muted flex items-center justify-center">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/20" />
-          <img
-            src="/luxury-fashion-boutique-interior-minimalist.jpg"
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/20 z-10" />
+          <Image
+            src="/hero-casual-wear-collection.jpg"
             alt="About LUXELINEAGE"
-            className="absolute inset-0 w-full h-full object-cover"
+            fill
+            priority
+            className="object-cover"
           />
-          <div className="relative z-10 text-center px-4 max-w-3xl mx-auto">
+          <div className="relative z-20 text-center px-4 max-w-3xl mx-auto">
             <h1 className="font-serif text-5xl md:text-7xl font-light tracking-wide text-white mb-6">
               About LUXELINEAGE
             </h1>
@@ -158,10 +161,11 @@ export default function AboutPage() {
               </div>
             </div>
             <div className="relative aspect-[4/5] overflow-hidden rounded-lg">
-              <img
+              <Image
                 src="/elegant-business-suit-on-mannequin.jpg"
                 alt="Our Commitment"
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
               />
             </div>
           </div>

@@ -9,18 +9,20 @@ import { useAuth } from "@/lib/auth-context"
 import { Loader2 } from "lucide-react"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user, admin } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const isLoginPage = pathname === "/admin/login"
   const isSignupPage = pathname === "/admin/signup"
 
   useEffect(() => {
+    console.log("AdminLayout auth state:", { isAuthenticated, loading, hasUser: !!user, hasAdmin: !!admin })
     // Don't redirect if we're on the login or signup page
     if (!isLoginPage && !isSignupPage && !loading && !isAuthenticated) {
+      console.log("Redirecting to login - not authenticated")
       router.push("/admin/login")
     }
-  }, [isAuthenticated, loading, router, isLoginPage, isSignupPage])
+  }, [isAuthenticated, loading, router, isLoginPage, isSignupPage, user, admin])
 
   // Show loading state
   if (loading && !isLoginPage && !isSignupPage) {

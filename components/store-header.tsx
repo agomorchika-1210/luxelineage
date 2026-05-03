@@ -21,16 +21,16 @@ export function StoreHeader() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link href="/shop" className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200">
+            <Link href="/shop" className="text-sm font-light tracking-wide hover:text-accent transition-colors">
               SHOP
             </Link>
-            <Link href="/collections" className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200">
+            <Link href="/collections" className="text-sm font-light tracking-wide hover:text-accent transition-colors">
               COLLECTIONS
             </Link>
-            <Link href="/brands" className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200">
+            <Link href="/brands" className="text-sm font-light tracking-wide hover:text-accent transition-colors">
               BRANDS
             </Link>
-            <Link href="/about" className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200">
+            <Link href="/about" className="text-sm font-light tracking-wide hover:text-accent transition-colors">
               ABOUT
             </Link>
           </nav>
@@ -69,19 +69,19 @@ export function StoreHeader() {
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-border">
             <nav className="flex flex-col gap-4">
-              <Link href="/shop" className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200">
+              <Link href="/shop" className="text-sm font-light tracking-wide hover:text-accent transition-colors">
                 SHOP
               </Link>
               <Link
                 href="/collections"
-                className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200"
+                className="text-sm font-light tracking-wide hover:text-accent transition-colors"
               >
                 COLLECTIONS
               </Link>
-              <Link href="/brands" className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200">
+              <Link href="/brands" className="text-sm font-light tracking-wide hover:text-accent transition-colors">
                 BRANDS
               </Link>
-              <Link href="/about" className="text-sm font-light tracking-wide hover:text-accent transition-colors duration-200">
+              <Link href="/about" className="text-sm font-light tracking-wide hover:text-accent transition-colors">
                 ABOUT
               </Link>
             </nav>

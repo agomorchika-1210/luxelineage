@@ -81,18 +81,25 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       if (product.colors && product.colors.length > 0) {
         setSelectedColor(product.colors[0])
       }
-      if (product.images && product.images.length > 0) {
-        setMainImage(product.images[0])
-      } else if (product.image) {
-        setMainImage(product.image)
+      // Combine main image with additional images and set main image
+      const allImages = product.image 
+        ? [product.image, ...(product.images || [])] 
+        : (product.images || [])
+      if (allImages.length > 0) {
+        setMainImage(allImages[0])
       }
     }
   }, [product])
 
+  // Combine main image with additional images for display
+  const allProductImages = product 
+    ? (product.image ? [product.image, ...(product.images || [])] : (product.images || []))
+    : []
+
   const isOutOfStock = product ? product.stockQuantity === 0 : false
   const isLowStock = product ? product.stockQuantity > 0 && product.stockQuantity < 10 : false
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!product) return
     
     // Check stock before adding to cart
@@ -114,16 +121,38 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       return
     }
 
+    // Verify current stock (in case it changed)
+    try {
+      const currentProduct = await productsApi.getById(product.id)
+      if (currentProduct.stockQuantity < 1) {
+        toast({
+          title: "Out of Stock",
+          description: "This product is no longer available.",
+          variant: "destructive",
+        })
+        // Refresh product data
+        setProduct({
+          ...product,
+          stockQuantity: currentProduct.stockQuantity
+        })
+        return
+      }
+    } catch (error) {
+      // If verification fails, still allow adding (will be validated at checkout)
+      console.warn("Could not verify stock, will validate at checkout")
+    }
+
     addItem({
       id: product.id, // Use string ID from database
       productId: product.id, // Store database ID separately
       name: product.name,
       brand: product.brand,
       price: product.price,
-      image: product.images && product.images.length > 0 ? product.images[0] : product.image || "/placeholder.svg",
+      image: product.image || (product.images && product.images.length > 0 ? product.images[0] : "/placeholder.svg"),
       size: selectedSize || "",
       color: selectedColor || "",
       quantity: 1,
+      stockQuantity: product.stockQuantity, // Store current stock for reference
     })
 
     toast({
@@ -144,7 +173,28 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     )
   }
 
-  if (error || !product) {
+  // Show error page for API errors
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <StoreHeader />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md mx-auto px-4">
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h1 className="text-2xl font-light mb-2">Unable to Load Product</h1>
+            <p className="text-muted-foreground mb-6">{error}</p>
+            <div className="flex gap-4 justify-center">
+              <Button onClick={() => window.location.reload()}>Try Again</Button>
+              <Button variant="outline" onClick={() => window.history.back()}>Go Back</Button>
+            </div>
+          </div>
+        </main>
+        <StoreFooter />
+      </div>
+    )
+  }
+
+  if (!product) {
     notFound()
   }
 
@@ -158,16 +208,16 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             {/* Product Images */}
             <div>
               <div className="aspect-[4/5] bg-muted rounded mb-4 overflow-hidden">
-                <img src={mainImage || product.image || "/placeholder.svg"} alt={product.name} className="w-full h-full object-cover" />
+                <img src={mainImage || "/placeholder.svg"} alt={product.name} className="w-full h-full object-cover" />
               </div>
-              {product.images && product.images.length > 1 && (
+              {allProductImages.length > 1 && (
                 <div className="grid grid-cols-3 gap-4">
-                  {product.images.map((image, idx) => (
+                  {allProductImages.map((image, idx) => (
                     <button
                       key={idx}
                       onClick={() => setMainImage(image)}
                       className={`aspect-[4/5] bg-muted rounded overflow-hidden border-2 transition-colors ${
-                        mainImage === image ? "border-primary" : "border-transparent"
+                        mainImage === image ? "border-primary" : "border-transparent hover:border-primary/50"
                       }`}
                     >
                       <img

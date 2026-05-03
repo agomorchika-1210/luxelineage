@@ -11,14 +11,20 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useCart } from "@/lib/cart-context"
 import { CreditCard, Wallet, Building2, Lock, Loader2, AlertCircle } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCart()
+  const { items, totalPrice, clearCart, validateCart, isLoaded } = useCart()
   const router = useRouter()
   const [paymentMethod, setPaymentMethod] = useState("card")
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return (crypto as any).randomUUID()
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  })
 
   const shipping = 0
   const tax = totalPrice * 0.1
@@ -27,12 +33,30 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Redirect to cart if empty (after cart is loaded)
+  useEffect(() => {
+    if (isLoaded && items.length === 0) {
+      router.push("/cart")
+    }
+  }, [isLoaded, items.length, router])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
 
     try {
+      // Validate cart stock before proceeding
+      const validation = await validateCart()
+      
+      if (!validation.valid) {
+        setError(
+          `Some items in your cart are no longer available:\n${validation.errors.join('\n')}\n\nPlease update your cart and try again.`
+        )
+        setIsSubmitting(false)
+        return
+      }
+
       const form = e.currentTarget as HTMLFormElement
       const formData = new FormData(form)
       
@@ -61,19 +85,47 @@ export default function CheckoutPage() {
         customerEmail: email,
         customerPhone: phone,
         shippingAddress,
-      })
+      }, idempotencyKey)
 
       clearCart()
       router.push("/order-confirmation")
     } catch (err: any) {
       setError(err.message || "Failed to place order. Please try again.")
       setIsSubmitting(false)
+      // New key for a future retry attempt after an error.
+      setIdempotencyKey(() => {
+        if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+          return (crypto as any).randomUUID()
+        }
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      })
     }
   }
 
+  // Show loading while cart is loading
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <StoreHeader />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </main>
+        <StoreFooter />
+      </div>
+    )
+  }
+
+  // Don't render checkout form if cart is empty
   if (items.length === 0) {
-    router.push("/cart")
-    return null
+    return (
+      <div className="min-h-screen flex flex-col">
+        <StoreHeader />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </main>
+        <StoreFooter />
+      </div>
+    )
   }
 
   return (

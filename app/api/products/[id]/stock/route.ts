@@ -5,9 +5,11 @@ import { requireAuth } from '@/lib/middleware'
 // POST /api/products/[id]/stock - Increase or decrease stock (admin only)
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+    
     const auth = await requireAuth(request)
     if (!auth) {
       return NextResponse.json(
@@ -16,17 +18,32 @@ export async function POST(
       )
     }
 
-    const { action, quantity } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const action = body?.action
+    const rawQuantity = body?.quantity
+    const quantity =
+      typeof rawQuantity === 'number'
+        ? rawQuantity
+        : typeof rawQuantity === 'string'
+          ? parseInt(rawQuantity, 10)
+          : NaN
 
-    if (!action || !quantity || (action !== 'increase' && action !== 'decrease')) {
+    if (!action || (action !== 'increase' && action !== 'decrease')) {
       return NextResponse.json(
         { error: 'Action must be "increase" or "decrease" and quantity is required' },
         { status: 400 }
       )
     }
 
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return NextResponse.json(
+        { error: 'Quantity must be a positive number' },
+        { status: 400 }
+      )
+    }
+
     const product = await prisma.product.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!product) {
@@ -49,8 +66,15 @@ export async function POST(
     }
 
     const updated = await prisma.product.update({
-      where: { id: params.id },
+      where: { id },
       data: { stockQuantity: newQuantity }
+    })
+
+    // Check for low stock and create notification if needed
+    const { checkLowStock } = await import('@/lib/notifications')
+    await checkLowStock(id).catch(err => {
+      console.error('Error checking low stock:', err)
+      // Don't fail the request if notification check fails
     })
 
     return NextResponse.json(updated)

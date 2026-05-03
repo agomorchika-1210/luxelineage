@@ -1,0 +1,195 @@
+{
+  "categories": [
+    {
+      "name": "Corporate Business/Casual",
+      "subcategories": [
+        {
+          "name": "Pants",
+          "description": "Trendy Men's Business Formal and Casual Trousers and Khaki Pants. They offer style, comfort and durability. Comes in various colours, fit for formal and casual wear, slim fit classic designs. High quality fabric and affordable.",
+          "sizes": ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48"],
+          "colors": ["Black", "Navy", "Charcoal", "Beige", "Grey", "Khaki"],
+          "fit": ["Slim Fit", "Classic Fit", "Regular Fit"]
+        },
+        {
+          "name": "Long Sleeve Shirts",
+          "description": "Men's Long Sleeve Shirts for office formal wear. Offer various designs, colours, authentic brands, durable for all year round formal wear and affordable.",
+          "sizes": ["S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Light Blue", "Pink", "Navy", "Charcoal"],
+          "collar": ["Button-Down", "Spread Collar", "Point Collar"]
+        },
+        {
+          "name": "Short Sleeve Shirts",
+          "description": "Men's Short Sleeve Shirts for office casual wear. Comes in various designs, colours, brands. They are durable for all year-round formal casual wear and very affordable. High quality fabric and affordable.",
+          "sizes": ["S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Light Blue", "Pink", "Navy", "Charcoal", "Beige"],
+          "collar": ["Button-Down", "Spread Collar", "Point Collar"]
+        }
+      ]
+    },
+    {
+      "name": "Casual Wears",
+      "subcategories": [
+        {
+          "name": "Casual Pants",
+          "description": "Trendy Men's Casual pants for all occasions – they offer comfort, style trendy design, slim fit, durable fabric and affordable.",
+          "sizes": ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48"],
+          "colors": ["Black", "Navy", "Grey", "Beige", "Olive", "Khaki", "Charcoal"],
+          "fit": ["Slim Fit", "Regular Fit", "Relaxed Fit"]
+        },
+        {
+          "name": "Casual Long Sleeve Shirts",
+          "description": "Trendy Men's Casual Long Sleeve Shirts, Designer Shirts for casual wear for all seasons – they offer comfort, style, trendy designs authentic brands, quality fabric and affordable.",
+          "sizes": ["S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Navy", "Black", "Grey", "Burgundy", "Forest Green", "Beige"],
+          "style": ["Regular", "Slim Fit", "Oversized"]
+        },
+        {
+          "name": "Casual Short Sleeve Shirts",
+          "description": "Trendy Men's Casual Short Sleeve Shirts, Designer Shirts for casual wear for all seasons – they offer comfort, style, trendy designs authentic brands, quality fabric and affordable.",
+          "sizes": ["S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Navy", "Black", "Grey", "Burgundy", "Red", "Green", "Beige"],
+          "style": ["Regular", "Slim Fit", "Oversized"]
+        },
+        {
+          "name": "Jeans",
+          "description": "Offer various Authentic American and European brands of jeans at very affordable prices. They come in sizes 30, 32, 34, 36, 38, 40, 42, 44, 46, 48; and offer various colours.",
+          "sizes": ["30", "32", "34", "36", "38", "40", "42", "44", "46", "48"],
+          "colors": ["Blue", "Black", "Grey", "Light Blue", "Dark Blue", "Indigo"],
+          "fit": ["Slim Fit", "Regular Fit", "Relaxed Fit", "Skinny Fit"],
+          "brands": ["Levi's", "Wrangler", "Diesel", "Calvin Klein", "Tommy Hilfiger"]
+        },
+        {
+          "name": "Cargo Pants",
+          "description": "Men's Cargo pants of various colours, casual wear, multi-pockets, suitable for all seasons.",
+          "sizes": ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48"],
+          "colors": ["Olive", "Black", "Khaki", "Navy", "Grey", "Beige"],
+          "fit": ["Regular Fit", "Relaxed Fit"]
+        },
+        {
+          "name": "Joggers",
+          "description": "Casual joggers for Men. They come in elastic waist and adjustable string. Various sizes, colours, trendy, designed with quality fabric. Suitable for various occasions – gym, jogging.",
+          "sizes": ["S", "M", "L", "XL", "XXL"],
+          "colors": ["Black", "Navy", "Grey", "Charcoal", "Olive"],
+          "waist": ["Elastic Waist", "Adjustable String"]
+        },
+        {
+          "name": "Polo Shirts",
+          "description": "Trendy Men's Polo Shirts for casual wear. Suitable for various occasions. They come in various sizes and colours. Made from quality fabric. Authentic American and European brands available.",
+          "sizes": ["XS", "S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Navy", "Black", "Red", "Green", "Blue", "Grey", "Beige"],
+          "brands": ["Lacoste", "Ralph Lauren", "Tommy Hilfiger", "Polo", "Nike", "Adidas"]
+        },
+        {
+          "name": "Round Neck T-Shirts",
+          "description": "Fashionable and trendy round neck T-shirts of various sizes. Made from quality fabric. Various designs and colors available at affordable prices.",
+          "sizes": ["XS", "S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Black", "Navy", "Grey", "Red", "Blue", "Green", "Beige"],
+          "style": ["Regular", "Slim Fit", "Oversized", "Vintage"]
+        }
+      ]
+    },
+    {
+      "name": "Men's Shoes",
+      "subcategories": [
+        {
+          "name": "Corporate Business Shoes",
+          "description": "Quality Trendy European shoes for corporate business wear. Comes in various sizes and colors.",
+          "sizes": ["7", "8", "9", "10", "11", "12"],
+          "colors": ["Black", "Brown", "Burgundy", "Navy"],
+          "types": ["Oxford", "Derby", "Brogues", "Monk Strap"]
+        },
+        {
+          "name": "Casual Shoes",
+          "description": "Quality Trendy European casual shoes. Comes in various sizes and colors.",
+          "sizes": ["7", "8", "9", "10", "11", "12"],
+          "colors": ["Brown", "Black", "Tan", "Navy", "Grey"],
+          "types": ["Loafers", "Boat Shoes", "Moccasins", "Driving Shoes"]
+        },
+        {
+          "name": "Sneakers",
+          "description": "Quality Trendy European sneakers. Comes in various sizes and colors.",
+          "sizes": ["7", "8", "9", "10", "11", "12"],
+          "colors": ["White", "Black", "Navy", "Grey", "Beige", "Multi-color"],
+          "types": ["Running", "Lifestyle", "High-Top", "Low-Top"]
+        },
+        {
+          "name": "Slip-On",
+          "description": "Quality Trendy European slip-on shoes. Comes in various sizes and colors.",
+          "sizes": ["7", "8", "9", "10", "11", "12"],
+          "colors": ["Black", "Brown", "Navy", "Grey", "Beige"],
+          "types": ["Loafers", "Moccasins", "Espadrilles"]
+        },
+        {
+          "name": "Loafers",
+          "description": "Quality Trendy European loafers. Comes in various sizes and colors.",
+          "sizes": ["7", "8", "9", "10", "11", "12"],
+          "colors": ["Brown", "Black", "Burgundy", "Tan", "Navy"],
+          "types": ["Penny Loafers", "Tassel Loafers", "Horsebit Loafers"]
+        }
+      ]
+    },
+    {
+      "name": "Accessories",
+      "subcategories": [
+        {
+          "name": "Leather Belts",
+          "description": "Quality leather belts in various sizes and colors.",
+          "sizes": ["30", "32", "34", "36", "38", "40", "42", "44"],
+          "colors": ["Black", "Brown", "Tan", "Navy"],
+          "buckle": ["Classic", "Modern", "Designer"]
+        },
+        {
+          "name": "Suspenders",
+          "description": "Quality suspenders for formal and casual wear.",
+          "sizes": ["One Size"],
+          "colors": ["Black", "Navy", "Grey", "Brown"],
+          "attachment": ["Clip-On", "Button"]
+        },
+        {
+          "name": "Ties",
+          "description": "Quality ties for formal and business wear.",
+          "sizes": ["Standard"],
+          "colors": ["Various"],
+          "width": ["Slim", "Regular", "Wide"]
+        },
+        {
+          "name": "Boxers",
+          "description": "Quality boxers in various sizes.",
+          "sizes": ["S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Black", "Navy", "Grey", "Multi-color"],
+          "material": ["Cotton", "Cotton Blend"]
+        },
+        {
+          "name": "Socks",
+          "description": "Quality socks in various sizes and styles.",
+          "sizes": ["One Size"],
+          "colors": ["White", "Black", "Navy", "Grey", "Beige", "Multi-color"],
+          "length": ["Ankle", "Crew", "Knee-High"]
+        },
+        {
+          "name": "Singlets",
+          "description": "Quality singlets in various sizes.",
+          "sizes": ["S", "M", "L", "XL", "XXL"],
+          "colors": ["White", "Black", "Navy", "Grey"],
+          "material": ["Cotton", "Cotton Blend"]
+        }
+      ]
+    }
+  ],
+  "commonSizes": {
+    "clothing": ["XS", "S", "M", "L", "XL", "XXL"],
+    "pants": ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48"],
+    "shoes": ["7", "8", "9", "10", "11", "12"]
+  },
+  "commonColors": [
+    "Black", "Navy", "White", "Grey", "Charcoal", "Beige", "Khaki", 
+    "Olive", "Brown", "Burgundy", "Tan", "Light Blue", "Pink", 
+    "Red", "Green", "Blue", "Forest Green", "Indigo", "Multi-color"
+  ],
+  "commonBrands": [
+    "Hugo Boss", "Armani", "Gucci", "Lacoste", "Ralph Lauren", 
+    "Tommy Hilfiger", "Calvin Klein", "Diesel", "Levi's", "Wrangler",
+    "Nike", "Adidas", "Polo", "Prada", "Versace"
+  ]
+}
+

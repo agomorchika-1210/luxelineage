@@ -12,7 +12,7 @@ import Link from "next/link"
 export default function CartPage() {
   const { items, removeItem, updateQuantity, totalPrice } = useCart()
 
-  const shipping = 0 // Free shipping
+  const shipping: number = 0 // Free shipping
   const tax = totalPrice * 0.1 // 10% tax
   const total = totalPrice + shipping + tax
 

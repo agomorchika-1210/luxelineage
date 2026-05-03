@@ -32,31 +32,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-
-// PATCH /api/notifications/[id]/read - Mark notification as read
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await requireAuth(request)
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    const { markNotificationAsRead } = await import('@/lib/notifications')
-    await markNotificationAsRead(params.id)
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Mark notification read error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-}
-

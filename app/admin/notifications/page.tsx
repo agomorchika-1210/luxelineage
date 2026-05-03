@@ -1,68 +1,146 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Package, ShoppingCart, AlertTriangle, X } from "lucide-react"
+import {
+  Package,
+  ShoppingCart,
+  AlertTriangle,
+  X,
+  Loader2,
+  CheckCircle2,
+  Truck,
+  CheckCircle,
+  XCircle,
+} from "lucide-react"
+import { useState, useEffect } from "react"
+import { notificationsApi, productsApi } from "@/lib/api-client"
+import { useToast } from "@/hooks/use-toast"
 
-// Mock notifications data
-const notifications = [
-  {
-    id: 1,
-    type: "sale",
-    title: "New Order Received",
-    message: "Order #ORD-007 from Jessica Martin for $1,547",
-    time: "2 minutes ago",
-    read: false,
-    icon: ShoppingCart,
-  },
-  {
-    id: 2,
-    type: "low-stock",
-    title: "Low Stock Alert",
-    message: "Leather Loafers (SKU: LL-005) - Only 5 items remaining",
-    time: "15 minutes ago",
-    read: false,
-    icon: AlertTriangle,
-  },
-  {
-    id: 3,
-    type: "sale",
-    title: "Item Sold",
-    message: "Cashmere Sweater sold to Robert Lee",
-    time: "1 hour ago",
-    read: false,
-    icon: Package,
-  },
-  {
-    id: 4,
-    type: "low-stock",
-    title: "Low Stock Alert",
-    message: "Slim Fit Chinos (SKU: CH-003) - Only 8 items remaining",
-    time: "2 hours ago",
-    read: true,
-    icon: AlertTriangle,
-  },
-  {
-    id: 5,
-    type: "order",
-    title: "New Order Received",
-    message: "Order #ORD-006 from Lisa Anderson for $2,896",
-    time: "3 hours ago",
-    read: true,
-    icon: ShoppingCart,
-  },
-  {
-    id: 6,
-    type: "low-stock",
-    title: "Out of Stock",
-    message: "Jogger Pants (SKU: JP-007) is now out of stock",
-    time: "5 hours ago",
-    read: true,
-    icon: AlertTriangle,
-  },
-]
+type NotificationType =
+  | "ORDER_PLACED"
+  | "ORDER_PROCESSED"
+  | "ORDER_SHIPPED"
+  | "ORDER_DELIVERED"
+  | "ORDER_CANCELLED"
+  | "LOW_STOCK"
+
+interface Notification {
+  id: string
+  type: NotificationType
+  message: string
+  read: boolean
+  createdAt: string
+}
+
+interface Product {
+  id: string
+  name: string
+  sku: string
+  stockQuantity: number
+}
 
 export default function NotificationsPage() {
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [notifs, products] = await Promise.all([
+        notificationsApi.getAll(),
+        productsApi.getAll()
+      ])
+      setNotifications(notifs)
+      // Filter products with low stock (< 10) or out of stock
+      setLowStockProducts(products.filter((p: Product) => p.stockQuantity < 10))
+    } catch (error: any) {
+      console.error("Failed to load notifications:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load notifications",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+  }
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case "ORDER_PLACED":
+        return ShoppingCart
+      case "ORDER_PROCESSED":
+        return CheckCircle2
+      case "ORDER_SHIPPED":
+        return Truck
+      case "ORDER_DELIVERED":
+        return CheckCircle
+      case "ORDER_CANCELLED":
+        return XCircle
+      case "LOW_STOCK":
+        return AlertTriangle
+      default:
+        return Package
+    }
+  }
+
+  const getNotificationTitle = (type: string) => {
+    switch (type) {
+      case "ORDER_PLACED":
+        return "New Order Received"
+      case "ORDER_PROCESSED":
+        return "Order Processed"
+      case "ORDER_SHIPPED":
+        return "Order Shipped"
+      case "ORDER_DELIVERED":
+        return "Order Delivered"
+      case "ORDER_CANCELLED":
+        return "Order Cancelled"
+      case "LOW_STOCK":
+        return "Low Stock Alert"
+      default:
+        return "Notification"
+    }
+  }
+
   const unreadCount = notifications.filter((n) => !n.read).length
+  const outOfStockCount = lowStockProducts.filter(p => p.stockQuantity === 0).length
+  const lowStockCount = lowStockProducts.filter(p => p.stockQuantity > 0).length
+  const todayOrders = notifications.filter(n => {
+    const today = new Date()
+    const notifDate = new Date(n.createdAt)
+    return notifDate.toDateString() === today.toDateString() && n.type === "ORDER_PLACED"
+  }).length
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -73,7 +151,9 @@ export default function NotificationsPage() {
             {unreadCount} unread notification{unreadCount !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button variant="outline">Mark All as Read</Button>
+        <Button variant="outline" onClick={loadData}>
+          Refresh
+        </Button>
       </div>
 
       {/* Notification Categories */}
@@ -86,7 +166,7 @@ export default function NotificationsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-light">24</div>
+            <div className="text-3xl font-light">{todayOrders}</div>
             <p className="text-xs text-muted-foreground mt-1">Today</p>
           </CardContent>
         </Card>
@@ -94,70 +174,110 @@ export default function NotificationsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              ITEMS SOLD
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-light">58</div>
-            <p className="text-xs text-muted-foreground mt-1">Today</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
               LOW STOCK
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-light">12</div>
-            <p className="text-xs text-muted-foreground mt-1">Items need attention</p>
+            <div className="text-3xl font-light text-amber-500">{lowStockCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Items below 10 units</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium tracking-wide flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              OUT OF STOCK
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-light text-destructive">{outOfStockCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Need immediate restock</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Notifications List */}
+      {/* Low Stock Alerts */}
+      {lowStockProducts.length > 0 && (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-medium tracking-wide">ALL NOTIFICATIONS</CardTitle>
+            <CardTitle className="text-base font-medium tracking-wide">STOCK ALERTS</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {notifications.map((notification) => {
-              const Icon = notification.icon
-              return (
+              {lowStockProducts.map((product) => (
                 <div
-                  key={notification.id}
+                  key={product.id}
                   className={`flex items-start gap-4 p-4 rounded border transition-colors ${
-                    notification.read ? "border-border bg-transparent" : "border-primary/20 bg-primary/5"
+                    product.stockQuantity === 0 
+                      ? "border-destructive/30 bg-destructive/5" 
+                      : "border-amber-500/30 bg-amber-500/5"
                   }`}
                 >
                   <div
                     className={`p-2 rounded ${
-                      notification.type === "low-stock"
+                      product.stockQuantity === 0
                         ? "bg-destructive/10 text-destructive"
-                        : "bg-primary/10 text-primary"
+                        : "bg-amber-500/10 text-amber-500"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
+                    <AlertTriangle className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4 mb-1">
-                      <h3 className="text-sm font-medium">{notification.title}</h3>
-                      {!notification.read && <Badge variant="default">New</Badge>}
+                      <h3 className="text-sm font-medium">
+                        {product.stockQuantity === 0 ? "Out of Stock" : "Low Stock Alert"}
+                      </h3>
+                      <Badge variant={product.stockQuantity === 0 ? "destructive" : "secondary"}>
+                        {product.stockQuantity} left
+                      </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">{notification.message}</p>
-                    <p className="text-xs text-muted-foreground">{notification.time}</p>
+                    <p className="text-sm text-muted-foreground mb-1">{product.name}</p>
+                    <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
-                    <X className="h-4 w-4" />
-                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Notifications List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-medium tracking-wide">ORDER NOTIFICATIONS</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {notifications.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No notifications yet</p>
+          ) : (
+            <div className="space-y-3">
+              {notifications.map((notification) => {
+                const Icon = getNotificationIcon(notification.type)
+                return (
+                  <div
+                    key={notification.id}
+                    className={`flex items-start gap-4 p-4 rounded border transition-colors ${
+                      notification.read ? "border-border bg-transparent" : "border-primary/20 bg-primary/5"
+                    }`}
+                  >
+                    <div className="p-2 rounded bg-primary/10 text-primary">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4 mb-1">
+                        <h3 className="text-sm font-medium">{getNotificationTitle(notification.type)}</h3>
+                        {!notification.read && <Badge variant="default">New</Badge>}
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">{notification.message}</p>
+                      <p className="text-xs text-muted-foreground">{formatTimeAgo(notification.createdAt)}</p>
+                    </div>
                 </div>
               )
             })}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

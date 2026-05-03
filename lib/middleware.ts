@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
-import { supabaseAdmin } from './supabase-admin'
 import { prisma } from './prisma'
+import { verifyToken } from './verify-token'
 
 export type AdminRole = 'ADMIN' | 'MANAGER' | 'SALES_PERSON'
 
@@ -24,15 +24,13 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult | nu
   if (!token) return null
   
   try {
-    // Verify Supabase token
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
-    
-    if (error || !user) {
-      console.error('Supabase token verification error:', error)
+    const verified = await verifyToken(token)
+
+    if (!verified) {
       return null
     }
-    
-    const supabaseUid = user.id
+
+    const supabaseUid = verified.id
 
     // Check if admin exists in database
     const admin = await prisma.admin.findUnique({
@@ -53,8 +51,13 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult | nu
     console.error('Auth verification error:', {
       code: error.code,
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      name: error.name
     })
+    // Log Prisma errors specifically
+    if (error.code === 'P1001' || error.message?.includes('Can\'t reach database')) {
+      console.error('Database connection error - check DATABASE_URL and network connectivity')
+    }
     return null
   }
 }

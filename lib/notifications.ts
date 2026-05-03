@@ -38,3 +38,36 @@ export async function markNotificationAsRead(notificationId: string) {
   })
 }
 
+/**
+ * Check if product stock is below threshold and create notification if needed
+ */
+export async function checkLowStock(productId: string) {
+  const product = await prisma.product.findUnique({
+    where: { id: productId }
+  })
+
+  if (!product) return
+
+  // Check if stock is below threshold
+  if (product.stockQuantity <= product.lowStockThreshold) {
+    // Check if we already have a recent low stock notification for this product
+    const recentNotification = await prisma.notification.findFirst({
+      where: {
+        type: 'LOW_STOCK',
+        message: { contains: product.name },
+        createdAt: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
+        }
+      }
+    })
+
+    // Only create notification if we don't have a recent one
+    if (!recentNotification) {
+      await createNotification(
+        'LOW_STOCK',
+        `Low stock alert: ${product.name} (SKU: ${product.sku}) has ${product.stockQuantity} units remaining (threshold: ${product.lowStockThreshold})`
+      )
+    }
+  }
+}
+

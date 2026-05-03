@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+function getAllowedOrigins(): string[] {
+  const raw = process.env.CORS_ALLOW_ORIGINS || ''
+  return raw
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+}
+
 // Routes that require authentication
 const protectedApiRoutes = [
   '/api/products', // POST, PUT, DELETE operations
@@ -26,12 +34,17 @@ function requiresAuth(pathname: string, method: string): boolean {
   for (const route of protectedApiRoutes) {
     if (pathname.startsWith(route)) {
       // Special cases for public operations
-      if (pathname === '/api/products' && method === 'GET') {
-        return false // GET products is public
+      
+      // GET products (list and individual) is public
+      if (pathname.startsWith('/api/products') && method === 'GET') {
+        return false
       }
+      
+      // POST orders (checkout) is public
       if (pathname === '/api/orders' && method === 'POST') {
-        return false // POST orders (checkout) is public
+        return false
       }
+      
       // All other operations require auth
       return true
     }
@@ -55,8 +68,13 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/api')) {
     const response = NextResponse.next()
 
-    // Set CORS headers
-    response.headers.set('Access-Control-Allow-Origin', '*')
+    // Set CORS headers (allowlist-based)
+    const origin = request.headers.get('origin')
+    const allowed = getAllowedOrigins()
+    if (origin && allowed.includes(origin)) {
+      response.headers.set('Access-Control-Allow-Origin', origin)
+      response.headers.set('Vary', 'Origin')
+    }
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
@@ -85,19 +103,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // Handle admin route protection
+  // Note: We let client-side handle auth checks for admin pages
+  // The AdminLayout component will redirect if not authenticated
+  // This allows Supabase Auth to work properly client-side
   if (isAdminRoute(pathname)) {
-    // Check for auth token in cookie or header
-    const token = request.cookies.get('auth_token')?.value || 
-                  request.headers.get('authorization')?.replace('Bearer ', '')
-
-    if (!token) {
-      // Redirect to login
-      const loginUrl = new URL('/admin/login', request.url)
-      loginUrl.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(loginUrl)
-    }
-
-    // Token validation happens client-side and in API routes
+    // Allow the request through - client-side will handle auth
     return NextResponse.next()
   }
 
